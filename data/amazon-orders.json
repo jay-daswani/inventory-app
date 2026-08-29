@@ -1,0 +1,30 @@
+[
+  {
+    "platform": "Amazon",
+    "order_id": "AMZ-DEMO-1001",
+    "order_line_id": "1",
+    "order_date": "2026-06-16T08:00:00Z",
+    "platform_sku_id": "AMZ-TSHIRT-BLK-M",
+    "product_name": "Black T-Shirt M",
+    "quantity": 1,
+    "selling_price": 499,
+    "region": "MH",
+    "status": "Pending",
+    "dispatch_status": "Pending",
+    "is_cancelled_pre_dispatch": false
+  },
+  {
+    "platform": "Amazon",
+    "order_id": "AMZ-DEMO-1002",
+    "order_line_id": "1",
+    "order_date": "2026-06-16T09:00:00Z",
+    "platform_sku_id": "AMZ-SHIRT-WHT-L",
+    "product_name": "White Shirt L",
+    "quantity": 2,
+    "selling_price": 899,
+    "region": "KA",
+    "status": "Pending",
+    "dispatch_status": "Pending",
+    "is_cancelled_pre_dispatch": false
+  }
+]
