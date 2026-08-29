@@ -1,709 +1,693 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <meta http-equiv="Content-Style-Type" content="text/css">
-  <title></title>
-  <meta name="Generator" content="Cocoa HTML Writer">
-  <meta name="CocoaVersion" content="2685.4">
-  <style type="text/css">
-    p.p1 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica}
-    p.p2 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica; min-height: 14.0px}
-  </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Inventory & Manufacturing OS</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-<p class="p1">&lt;!doctype html&gt;</p>
-<p class="p1">&lt;html lang="en"&gt;</p>
-<p class="p1">&lt;head&gt;</p>
-<p class="p1"><span class="Apple-converted-space">  </span>&lt;meta charset="utf-8" /&gt;</p>
-<p class="p1"><span class="Apple-converted-space">  </span>&lt;meta name="viewport" content="width=device-width, initial-scale=1" /&gt;</p>
-<p class="p1"><span class="Apple-converted-space">  </span>&lt;title&gt;Inventory &amp; Manufacturing OS&lt;/title&gt;</p>
-<p class="p1"><span class="Apple-converted-space">  </span>&lt;script src="https://cdn.tailwindcss.com"&gt;&lt;/script&gt;</p>
-<p class="p1">&lt;/head&gt;</p>
-<p class="p1">&lt;body class="bg-slate-100 text-slate-900"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">  </span>&lt;header class="bg-slate-900 text-white p-4 flex flex-wrap gap-3 items-center justify-between"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>&lt;div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">      </span>&lt;h1 class="text-xl font-bold"&gt;Inventory &amp; Manufacturing OS&lt;/h1&gt;</p>
-<p class="p1"><span class="Apple-converted-space">      </span>&lt;p class="text-xs text-slate-300"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>Orders, returns, inventory, forecast, and manufacturing plan</p>
-<p class="p1"><span class="Apple-converted-space">      </span>&lt;/p&gt;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>&lt;div class="flex items-center gap-3"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">      </span>&lt;span id="last-updated" class="text-xs text-slate-300"&gt;&lt;/span&gt;</p>
-<p class="p1"><span class="Apple-converted-space">      </span>&lt;button id="sync-button" class="bg-emerald-500 hover:bg-emerald-600 px-3 py-2 rounded text-sm font-semibold"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>Sync now</p>
-<p class="p1"><span class="Apple-converted-space">      </span>&lt;/button&gt;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">  </span>&lt;/header&gt;</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">  </span>&lt;nav id="nav" class="p-4 flex flex-wrap gap-2"&gt;&lt;/nav&gt;</p>
-<p class="p1"><span class="Apple-converted-space">  </span>&lt;main id="content" class="p-4"&gt;&lt;/main&gt;</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">  </span>&lt;script&gt;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>const api = '/.netlify/functions/api';</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>const tabs = [</p>
-<p class="p1"><span class="Apple-converted-space">      </span>['dashboard', 'Dashboard'],</p>
-<p class="p1"><span class="Apple-converted-space">      </span>['packing', 'Packing Queue'],</p>
-<p class="p1"><span class="Apple-converted-space">      </span>['returns', 'Return Processing'],</p>
-<p class="p1"><span class="Apple-converted-space">      </span>['inventory', 'Inventory'],</p>
-<p class="p1"><span class="Apple-converted-space">      </span>['manufacturing', 'Manufacturing Plan'],</p>
-<p class="p1"><span class="Apple-converted-space">      </span>['sku', 'SKU Master'],</p>
-<p class="p1"><span class="Apple-converted-space">      </span>['exceptions', 'Exceptions'],</p>
-<p class="p1"><span class="Apple-converted-space">      </span>['sync', 'Sync Logs'],</p>
-<p class="p1"><span class="Apple-converted-space">      </span>['import', 'Import']</p>
-<p class="p1"><span class="Apple-converted-space">    </span>];</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>let currentTab = 'dashboard';</p>
-<p class="p1"><span class="Apple-converted-space">    </span>let timer = null;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>let mfgParams = { weeks: 4, method: '13W' };</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>function esc(value) {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>return String(value ?? '')</p>
-<p class="p1"><span class="Apple-converted-space">        </span>.replaceAll('&amp;', '&amp;amp;')</p>
-<p class="p1"><span class="Apple-converted-space">        </span>.replaceAll('&lt;', '&amp;lt;')</p>
-<p class="p1"><span class="Apple-converted-space">        </span>.replaceAll('&gt;', '&amp;gt;')</p>
-<p class="p1"><span class="Apple-converted-space">        </span>.replaceAll('"', '&amp;quot;')</p>
-<p class="p1"><span class="Apple-converted-space">        </span>.replaceAll("'", '&amp;#039;');</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>function setContent(html) {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>document.getElementById('content').innerHTML = html;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>function showError(err) {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>setContent(`</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;div class="bg-red-100 border border-red-300 text-red-800 p-4 rounded"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;div class="font-bold"&gt;Error&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;div&gt;${esc(err.message || err)}&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">      </span>`);</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>async function apiGet(resource, params = {}) {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>const qs = new URLSearchParams({ resource, ...params });</p>
-<p class="p1"><span class="Apple-converted-space">      </span>const res = await fetch(`${api}?${qs.toString()}`);</p>
-<p class="p1"><span class="Apple-converted-space">      </span>const data = await res.json();</p>
-<p class="p1"><span class="Apple-converted-space">      </span>if (!res.ok) throw new Error(data.error || `Request failed with status ${res.status}`);</p>
-<p class="p1"><span class="Apple-converted-space">      </span>return data;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>async function apiPost(action, body = {}) {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>const res = await fetch(api, {</p>
-<p class="p1"><span class="Apple-converted-space">        </span>method: 'POST',</p>
-<p class="p1"><span class="Apple-converted-space">        </span>headers: { 'Content-Type': 'application/json' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>body: JSON.stringify({ action, ...body })</p>
-<p class="p1"><span class="Apple-converted-space">      </span>});</p>
-<p class="p1"><span class="Apple-converted-space">      </span>const data = await res.json();</p>
-<p class="p1"><span class="Apple-converted-space">      </span>if (!res.ok) throw new Error(data.error || `Request failed with status ${res.status}`);</p>
-<p class="p1"><span class="Apple-converted-space">      </span>return data;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>function renderNav() {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>const html = tabs.map(([key, label]) =&gt; {</p>
-<p class="p1"><span class="Apple-converted-space">        </span>const active = key === currentTab;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>return `</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;button</p>
-<p class="p1"><span class="Apple-converted-space">            </span>data-tab="${key}"</p>
-<p class="p1"><span class="Apple-converted-space">            </span>class="px-4 py-2 rounded ${active ? 'bg-slate-900 text-white' : 'bg-white text-slate-800 hover:bg-slate-200'}"</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>${esc(label)}</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;/button&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>`;</p>
-<p class="p1"><span class="Apple-converted-space">      </span>}).join('');</p>
-<p class="p1"><span class="Apple-converted-space">      </span>document.getElementById('nav').innerHTML = html;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>function setTab(tab) {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>currentTab = tab;</p>
-<p class="p1"><span class="Apple-converted-space">      </span>renderNav();</p>
-<p class="p1"><span class="Apple-converted-space">      </span>loadData();</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">      </span>if (timer) clearInterval(timer);</p>
-<p class="p1"><span class="Apple-converted-space">      </span>const interval = tab === 'packing' ? 15000 : 60000;</p>
-<p class="p1"><span class="Apple-converted-space">      </span>timer = setInterval(loadData, interval);</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>async function loadData() {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>try {</p>
-<p class="p1"><span class="Apple-converted-space">        </span>document.getElementById('last-updated').textContent =</p>
-<p class="p1"><span class="Apple-converted-space">          </span>`Updated ${new Date().toLocaleTimeString()}`;</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>if (currentTab === 'dashboard') {</p>
-<p class="p1"><span class="Apple-converted-space">          </span>const data = await apiGet('dashboard');</p>
-<p class="p1"><span class="Apple-converted-space">          </span>renderDashboard(data);</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>if (currentTab === 'packing') {</p>
-<p class="p1"><span class="Apple-converted-space">          </span>const data = await apiGet('packing-queue');</p>
-<p class="p1"><span class="Apple-converted-space">          </span>renderPacking(data);</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>if (currentTab === 'returns') {</p>
-<p class="p1"><span class="Apple-converted-space">          </span>const data = await apiGet('returns-pending');</p>
-<p class="p1"><span class="Apple-converted-space">          </span>renderReturns(data);</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>if (currentTab === 'inventory') {</p>
-<p class="p1"><span class="Apple-converted-space">          </span>const [inventory, skus] = await Promise.all([</p>
-<p class="p1"><span class="Apple-converted-space">            </span>apiGet('inventory'),</p>
-<p class="p1"><span class="Apple-converted-space">            </span>apiGet('sku-master')</p>
-<p class="p1"><span class="Apple-converted-space">          </span>]);</p>
-<p class="p1"><span class="Apple-converted-space">          </span>renderInventory(inventory, skus);</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>if (currentTab === 'manufacturing') {</p>
-<p class="p1"><span class="Apple-converted-space">          </span>const data = await apiGet('manufacturing-plan', mfgParams);</p>
-<p class="p1"><span class="Apple-converted-space">          </span>renderManufacturing(data);</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>if (currentTab === 'sku') {</p>
-<p class="p1"><span class="Apple-converted-space">          </span>const data = await apiGet('sku-master');</p>
-<p class="p1"><span class="Apple-converted-space">          </span>renderSkuMaster(data);</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>if (currentTab === 'exceptions') {</p>
-<p class="p1"><span class="Apple-converted-space">          </span>const data = await apiGet('exceptions');</p>
-<p class="p1"><span class="Apple-converted-space">          </span>renderExceptions(data);</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>if (currentTab === 'sync') {</p>
-<p class="p1"><span class="Apple-converted-space">          </span>const data = await apiGet('sync-logs');</p>
-<p class="p1"><span class="Apple-converted-space">          </span>renderSyncLogs(data);</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>if (currentTab === 'import') {</p>
-<p class="p1"><span class="Apple-converted-space">          </span>renderImport();</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}</p>
-<p class="p1"><span class="Apple-converted-space">      </span>} catch (err) {</p>
-<p class="p1"><span class="Apple-converted-space">        </span>showError(err);</p>
-<p class="p1"><span class="Apple-converted-space">      </span>}</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>function card(label, value, sub = '') {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>return `</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;div class="bg-white rounded shadow p-4"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;div class="text-sm text-slate-500"&gt;${esc(label)}&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;div class="text-2xl font-bold"&gt;${esc(value ?? 0)}&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>${sub ? `&lt;div class="text-xs text-slate-400 mt-1"&gt;${esc(sub)}&lt;/div&gt;` : ''}</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">      </span>`;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>function table(rows, columns, emptyMessage = 'No records found') {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>if (!rows || !rows.length) {</p>
-<p class="p1"><span class="Apple-converted-space">        </span>return `&lt;div class="bg-white rounded shadow p-4 text-slate-500"&gt;${esc(emptyMessage)}&lt;/div&gt;`;</p>
-<p class="p1"><span class="Apple-converted-space">      </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">      </span>const head = columns.map(col =&gt; `&lt;th class="text-left p-3 border-b"&gt;${esc(col.label)}&lt;/th&gt;`).join('');</p>
-<p class="p1"><span class="Apple-converted-space">      </span>const body = rows.map(row =&gt; {</p>
-<p class="p1"><span class="Apple-converted-space">        </span>const cells = columns.map(col =&gt; {</p>
-<p class="p1"><span class="Apple-converted-space">          </span>const value = col.render ? col.render(row) : row[col.key];</p>
-<p class="p1"><span class="Apple-converted-space">          </span>return `&lt;td class="p-3 border-b align-top"&gt;${value}&lt;/td&gt;`;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}).join('');</p>
-<p class="p1"><span class="Apple-converted-space">        </span>return `&lt;tr&gt;${cells}&lt;/tr&gt;`;</p>
-<p class="p1"><span class="Apple-converted-space">      </span>}).join('');</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">      </span>return `</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;div class="overflow-auto bg-white rounded shadow"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;table class="min-w-full text-sm"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;thead class="bg-slate-50"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;tr&gt;${head}&lt;/tr&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;/thead&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;tbody&gt;${body}&lt;/tbody&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;/table&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">      </span>`;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>function normalizeSummary(input) {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>if (!input) return {};</p>
-<p class="p1"><span class="Apple-converted-space">      </span>if (Array.isArray(input)) input = input[0];</p>
-<p class="p1"><span class="Apple-converted-space">      </span>if (input &amp;&amp; input.dashboard_summary) return input.dashboard_summary;</p>
-<p class="p1"><span class="Apple-converted-space">      </span>return input;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>function renderDashboard(data) {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>const s = normalizeSummary(data);</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">      </span>setContent(`</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;div class="grid gap-3 md:grid-cols-3 xl:grid-cols-4"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>${card('Gross Orders', s.gross_order_units, 'All imported order units')}</p>
-<p class="p1"><span class="Apple-converted-space">          </span>${card('Pre-Dispatch Cancellations', s.pre_dispatch_cancel_units, 'Cancelled before dispatch')}</p>
-<p class="p1"><span class="Apple-converted-space">          </span>${card('Net Demand', s.net_demand_units, 'Gross orders minus pre-dispatch cancellations')}</p>
-<p class="p1"><span class="Apple-converted-space">          </span>${card('Returns', s.return_units, 'All imported return units')}</p>
-<p class="p1"><span class="Apple-converted-space">          </span>${card('Return Rate', `${s.return_rate ?? 0}%`, 'Returns / gross orders')}</p>
-<p class="p1"><span class="Apple-converted-space">          </span>${card('Sellable Inventory', s.sellable_inventory, 'Available for sale')}</p>
-<p class="p1"><span class="Apple-converted-space">          </span>${card('Processing Inventory', s.processing_inventory, 'Press / dry cleaning / processing')}</p>
-<p class="p1"><span class="Apple-converted-space">          </span>${card('SPF Claim Inventory', s.spf_claim_inventory, 'Blocked under claim')}</p>
-<p class="p1"><span class="Apple-converted-space">          </span>${card('SKUs Short', s.shortage_skus, 'SKUs needing manufacture')}</p>
-<p class="p1"><span class="Apple-converted-space">          </span>${card('Pieces to Manufacture', s.total_manufacture_pieces, 'Total recommended production')}</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;/div&gt;</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;div class="mt-4 bg-blue-50 border border-blue-200 text-blue-900 p-4 rounded"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;div class="font-semibold"&gt;How this works&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;div class="mt-2 text-sm leading-6"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>Forecast Demand = Moving Average of Gross Orders minus Pre-Dispatch Cancellations.&lt;br /&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>Returns are analyzed separately and do not reduce the primary forecast demand.&lt;br /&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>Manufacturing Quantity = MAX(0, Forecast Required Inventory - Actual Usable Inventory).&lt;br /&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>Actual Usable Inventory = Sellable Inventory only. Processing and SPF claim stock are excluded.</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">      </span>`);</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>function renderPacking(rows) {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>const columns = [</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Platform', key: 'platform' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Order Date', render: r =&gt; esc(new Date(r.order_date).toLocaleString()) },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Order ID', render: r =&gt; esc(r.order_id) },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'SKU', render: r =&gt; esc(r.platform_sku_id) },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Master SKU', render: r =&gt; esc(r.master_sku_id || 'Unmapped') },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Product', render: r =&gt; esc(r.product_name || '-') },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Qty', key: 'quantity' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Region', render: r =&gt; esc(r.region || '-') },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Dispatch Status', render: r =&gt; esc(r.dispatch_status || 'Pending') },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{</p>
-<p class="p1"><span class="Apple-converted-space">          </span>label: 'Action',</p>
-<p class="p1"><span class="Apple-converted-space">          </span>render: r =&gt; {</p>
-<p class="p1"><span class="Apple-converted-space">            </span>if ((r.dispatch_status || '').toLowerCase() === 'dispatched') {</p>
-<p class="p1"><span class="Apple-converted-space">              </span>return `&lt;span class="text-emerald-700 font-semibold"&gt;Dispatched&lt;/span&gt;`;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>}</p>
-<p class="p1"><span class="Apple-converted-space">            </span>return `</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;button</p>
-<p class="p1"><span class="Apple-converted-space">                </span>data-action="dispatch"</p>
-<p class="p1"><span class="Apple-converted-space">                </span>data-id="${r.id}"</p>
-<p class="p1"><span class="Apple-converted-space">                </span>class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded"</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&gt;</p>
-<p class="p1"><span class="Apple-converted-space">                </span>Mark Dispatched</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;/button&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>`;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>}</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}</p>
-<p class="p1"><span class="Apple-converted-space">      </span>];</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">      </span>setContent(`</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;div class="flex items-center justify-between mb-3"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;h2 class="text-lg font-bold"&gt;Packing Queue&lt;/h2&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;div class="text-sm text-slate-500"&gt;Refreshes every 15 seconds&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>${table(rows, columns, 'No pending orders found. Click Sync now if you expected orders.')}</p>
-<p class="p1"><span class="Apple-converted-space">      </span>`);</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>function renderReturns(rows) {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>const columns = [</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Platform', key: 'platform' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Return Date', render: r =&gt; esc(new Date(r.return_date).toLocaleString()) },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Return ID', render: r =&gt; esc(r.return_id) },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Order ID', render: r =&gt; esc(r.order_id) },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'SKU', render: r =&gt; esc(r.platform_sku_id) },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Master SKU', render: r =&gt; esc(r.master_sku_id || 'Unmapped') },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Qty', key: 'quantity' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Region', render: r =&gt; esc(r.region || '-') },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Major Reason', render: r =&gt; esc(r.major_reason || '-') },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Minor Reason', render: r =&gt; esc(r.minor_reason || '-') },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{</p>
-<p class="p1"><span class="Apple-converted-space">          </span>label: 'Classify',</p>
-<p class="p1"><span class="Apple-converted-space">          </span>render: r =&gt; `</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;div class="flex flex-wrap gap-2"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;button data-action="classify" data-id="${r.id}" data-classification="sellable"</p>
-<p class="p1"><span class="Apple-converted-space">                </span>class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">                </span>Sellable</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;/button&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;button data-action="classify" data-id="${r.id}" data-classification="processing"</p>
-<p class="p1"><span class="Apple-converted-space">                </span>class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1 rounded"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">                </span>Needs Press / Dry Cleaning</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;/button&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;button data-action="classify" data-id="${r.id}" data-classification="spf"</p>
-<p class="p1"><span class="Apple-converted-space">                </span>class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">                </span>SPF Claim</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;/button&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>`</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}</p>
-<p class="p1"><span class="Apple-converted-space">      </span>];</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">      </span>setContent(`</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;div class="mb-3"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;h2 class="text-lg font-bold"&gt;Return Processing&lt;/h2&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;p class="text-sm text-slate-500"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>Sellable increases sellable inventory. Processing keeps stock blocked until processed. SPF Claim blocks stock and creates a claim.</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;/p&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>${table(rows, columns, 'No pending returns found.')}</p>
-<p class="p1"><span class="Apple-converted-space">      </span>`);</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>function skuSelectOptions(skus) {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>return (skus || [])</p>
-<p class="p1"><span class="Apple-converted-space">        </span>.map(s =&gt; `&lt;option value="${esc(s.master_sku_id)}"&gt;${esc(s.master_sku_id)} - ${esc(s.product_name)}&lt;/option&gt;`)</p>
-<p class="p1"><span class="Apple-converted-space">        </span>.join('');</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>function renderInventory(inventory, skus) {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>const columns = [</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Master SKU', key: 'master_sku_id' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Product', render: r =&gt; esc(r.sku_master?.product_name || '-') },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Variant', render: r =&gt; esc(r.sku_master?.variant_attributes || '-') },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Sellable', key: 'sellable_stock' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Processing', key: 'processing_stock' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'SPF Claim', key: 'spf_claim_stock' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Total Physical', render: r =&gt; Number(r.sellable_stock || 0) + Number(r.processing_stock || 0) + Number(r.spf_claim_stock || 0) },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Updated', render: r =&gt; esc(r.updated_at ? new Date(r.updated_at).toLocaleString() : '-') }</p>
-<p class="p1"><span class="Apple-converted-space">      </span>];</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">      </span>const options = skuSelectOptions(skus);</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">      </span>setContent(`</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;div class="grid gap-4 xl:grid-cols-[2fr_1fr]"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;h2 class="text-lg font-bold mb-3"&gt;Inventory Balances&lt;/h2&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>${table(inventory, columns, 'No inventory records found.')}</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;/div&gt;</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;div class="space-y-4"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;form data-form="add-inventory" class="bg-white rounded shadow p-4 space-y-3"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;h3 class="font-bold"&gt;Add / Adjust Sellable Inventory&lt;/h3&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;select name="master_sku_id" required class="w-full border rounded p-2"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">                </span>&lt;option value=""&gt;Select SKU&lt;/option&gt;</p>
-<p class="p1"><span class="Apple-converted-space">                </span>${options}</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;/select&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;input name="quantity" type="number" required placeholder="Quantity, use negative to reduce" class="w-full border rounded p-2" /&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;input name="note" type="text" placeholder="Note / reason" class="w-full border rounded p-2" /&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;button class="bg-slate-900 text-white px-4 py-2 rounded w-full"&gt;Save Inventory&lt;/button&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;/form&gt;</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;form data-form="process-to-sellable" class="bg-white rounded shadow p-4 space-y-3"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;h3 class="font-bold"&gt;Mark Processed Items Sellable&lt;/h3&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;p class="text-sm text-slate-500"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">                </span>Moves quantity from Processing to Sellable.</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;/p&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;select name="master_sku_id" required class="w-full border rounded p-2"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">                </span>&lt;option value=""&gt;Select SKU&lt;/option&gt;</p>
-<p class="p1"><span class="Apple-converted-space">                </span>${options}</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;/select&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;input name="quantity" type="number" min="1" required placeholder="Quantity" class="w-full border rounded p-2" /&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;button class="bg-emerald-600 text-white px-4 py-2 rounded w-full"&gt;Mark as Sellable&lt;/button&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;/form&gt;</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;form data-form="add-manufacturing" class="bg-white rounded shadow p-4 space-y-3"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;h3 class="font-bold"&gt;Add Manufactured Stock&lt;/h3&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;p class="text-sm text-slate-500"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">                </span>Adds finished goods into sellable inventory.</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;/p&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;select name="master_sku_id" required class="w-full border rounded p-2"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">                </span>&lt;option value=""&gt;Select SKU&lt;/option&gt;</p>
-<p class="p1"><span class="Apple-converted-space">                </span>${options}</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;/select&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;input name="quantity" type="number" min="1" required placeholder="Quantity" class="w-full border rounded p-2" /&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;button class="bg-blue-600 text-white px-4 py-2 rounded w-full"&gt;Add Production Stock&lt;/button&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;/form&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">      </span>`);</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>function renderManufacturing(rows) {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>const columns = [</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Master SKU', key: 'master_sku_id' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Product', render: r =&gt; esc(r.product_name || '-') },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: '3M SMA', render: r =&gt; esc(Number(r.sma_3m || 0).toFixed(2)) },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: '13W SMA', render: r =&gt; esc(Number(r.sma_13w || 0).toFixed(2)) },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Forecast Required', render: r =&gt; esc(Number(r.forecast_required || 0).toFixed(2)) },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Usable Stock', key: 'actual_usable_stock' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Gap', render: r =&gt; esc(Number(r.inventory_gap || 0).toFixed(2)) },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{</p>
-<p class="p1"><span class="Apple-converted-space">          </span>label: 'Verdict',</p>
-<p class="p1"><span class="Apple-converted-space">          </span>render: r =&gt; {</p>
-<p class="p1"><span class="Apple-converted-space">            </span>if (r.verdict === 'Manufacturing Required') {</p>
-<p class="p1"><span class="Apple-converted-space">              </span>return `&lt;span class="bg-red-100 text-red-700 px-2 py-1 rounded font-semibold"&gt;Manufacturing Required&lt;/span&gt;`;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>}</p>
-<p class="p1"><span class="Apple-converted-space">            </span>return `&lt;span class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-semibold"&gt;Inventory OK&lt;/span&gt;`;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>}</p>
-<p class="p1"><span class="Apple-converted-space">        </span>},</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Pieces to Manufacture', key: 'pieces_to_manufacture' }</p>
-<p class="p1"><span class="Apple-converted-space">      </span>];</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">      </span>setContent(`</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;div class="bg-white rounded shadow p-4 mb-4"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;div class="grid gap-3 md:grid-cols-3 items-end"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;label class="text-sm text-slate-500 block mb-1"&gt;Planning Horizon&lt;/label&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;select data-control="mfg-weeks" class="w-full border rounded p-2"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">                </span>${[1, 2, 4, 8, 13].map(v =&gt; `</p>
-<p class="p1"><span class="Apple-converted-space">                  </span>&lt;option value="${v}" ${Number(mfgParams.weeks) === v ? 'selected' : ''}&gt;</p>
-<p class="p1"><span class="Apple-converted-space">                    </span>${v} week${v &gt; 1 ? 's' : ''}</p>
-<p class="p1"><span class="Apple-converted-space">                  </span>&lt;/option&gt;</p>
-<p class="p1"><span class="Apple-converted-space">                </span>`).join('')}</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;/select&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;label class="text-sm text-slate-500 block mb-1"&gt;Forecast Method&lt;/label&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;select data-control="mfg-method" class="w-full border rounded p-2"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">                </span>&lt;option value="13W" ${mfgParams.method === '13W' ? 'selected' : ''}&gt;13-week SMA&lt;/option&gt;</p>
-<p class="p1"><span class="Apple-converted-space">                </span>&lt;option value="3M" ${mfgParams.method === '3M' ? 'selected' : ''}&gt;3-month SMA&lt;/option&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>&lt;/select&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;div class="text-sm text-slate-500"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>Required Forecast Quantity = Weekly SMA × Planning Weeks.</p>
-<p class="p1"><span class="Apple-converted-space">              </span>For 3-month SMA, monthly average is converted to weekly.</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;/div&gt;</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>${table(rows, columns, 'No manufacturing recommendations found.')}</p>
-<p class="p1"><span class="Apple-converted-space">      </span>`);</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>function renderSkuMaster(rows) {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>const columns = [</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Master SKU', key: 'master_sku_id' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Product', key: 'product_name' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Variant', render: r =&gt; esc(r.variant_attributes || '-') },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Status', key: 'status' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Created', render: r =&gt; esc(new Date(r.created_at).toLocaleString()) }</p>
-<p class="p1"><span class="Apple-converted-space">      </span>];</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">      </span>setContent(`</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;h2 class="text-lg font-bold mb-3"&gt;SKU Master&lt;/h2&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>${table(rows, columns, 'No SKUs found.')}</p>
-<p class="p1"><span class="Apple-converted-space">      </span>`);</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>function renderExceptions(data) {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>const negativeColumns = [</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Master SKU', key: 'master_sku_id' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Sellable', key: 'sellable_stock' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Processing', key: 'processing_stock' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'SPF Claim', key: 'spf_claim_stock' }</p>
-<p class="p1"><span class="Apple-converted-space">      </span>];</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">      </span>const unmappedColumns = [</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Platform', key: 'platform' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Platform SKU', key: 'platform_sku_id' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Product', render: r =&gt; esc(r.product_name || '-') },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Seen Count', key: 'occurrences' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Last Seen', render: r =&gt; esc(new Date(r.last_seen).toLocaleString()) },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{</p>
-<p class="p1"><span class="Apple-converted-space">          </span>label: 'Map',</p>
-<p class="p1"><span class="Apple-converted-space">          </span>render: r =&gt; `</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;button</p>
-<p class="p1"><span class="Apple-converted-space">              </span>data-action="map"</p>
-<p class="p1"><span class="Apple-converted-space">              </span>data-platform="${esc(r.platform)}"</p>
-<p class="p1"><span class="Apple-converted-space">              </span>data-platform-sku="${esc(r.platform_sku_id)}"</p>
-<p class="p1"><span class="Apple-converted-space">              </span>class="bg-slate-900 text-white px-3 py-1 rounded"</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>Map SKU</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;/button&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>`</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}</p>
-<p class="p1"><span class="Apple-converted-space">      </span>];</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">      </span>setContent(`</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;div class="space-y-6"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;h2 class="text-lg font-bold mb-3"&gt;Unmapped SKUs&lt;/h2&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>${table(data.unmapped_skus || [], unmappedColumns, 'No unmapped SKUs found.')}</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;/div&gt;</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;h2 class="text-lg font-bold mb-3"&gt;Negative Inventory&lt;/h2&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>${table(data.negative_inventory || [], negativeColumns, 'No negative inventory found.')}</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">      </span>`);</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>function renderSyncLogs(rows) {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>const columns = [</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Started', render: r =&gt; esc(new Date(r.started_at).toLocaleString()) },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Finished', render: r =&gt; esc(r.finished_at ? new Date(r.finished_at).toLocaleString() : '-') },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Platform', key: 'platform' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Status', key: 'status' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Records Imported', key: 'records_imported' },</p>
-<p class="p1"><span class="Apple-converted-space">        </span>{ label: 'Error', render: r =&gt; esc(r.error || '-') }</p>
-<p class="p1"><span class="Apple-converted-space">      </span>];</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">      </span>setContent(`</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;div class="mb-3 bg-white rounded shadow p-4"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;div class="font-bold"&gt;Automatic Sync&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;div class="text-sm text-slate-500 mt-1"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>The sync function runs every 2 minutes. It reads Amazon/Flipkart JSON sources or the demo files in the data folder.</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>${table(rows, columns, 'No sync logs found.')}</p>
-<p class="p1"><span class="Apple-converted-space">      </span>`);</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>function renderImport() {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>setContent(`</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;div class="grid gap-4 xl:grid-cols-2"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;form data-form="import-orders" class="bg-white rounded shadow p-4 space-y-3"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;h3 class="font-bold"&gt;Import Orders JSON&lt;/h3&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;p class="text-sm text-slate-500"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>Paste an array of order objects. Required fields:</p>
-<p class="p1"><span class="Apple-converted-space">              </span>platform, order_id, order_line_id, order_date, platform_sku_id, quantity.</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;/p&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;textarea name="orders_json" rows="12" class="w-full border rounded p-2 font-mono text-xs" placeholder='[{"platform":"Amazon","order_id":"123","order_line_id":"1","order_date":"2026-06-16T10:00:00Z","platform_sku_id":"AMZ-TSHIRT-BLK-M","quantity":1}]'&gt;&lt;/textarea&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;button class="bg-slate-900 text-white px-4 py-2 rounded"&gt;Import Orders&lt;/button&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;/form&gt;</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;form data-form="import-returns" class="bg-white rounded shadow p-4 space-y-3"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;h3 class="font-bold"&gt;Import Returns JSON&lt;/h3&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;p class="text-sm text-slate-500"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">              </span>Paste an array of return objects. Required fields:</p>
-<p class="p1"><span class="Apple-converted-space">              </span>platform, return_id, order_id, return_date, platform_sku_id, quantity.</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;/p&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;textarea name="returns_json" rows="12" class="w-full border rounded p-2 font-mono text-xs" placeholder='[{"platform":"Amazon","return_id":"RET123","order_id":"123","return_date":"2026-06-16T10:00:00Z","platform_sku_id":"AMZ-TSHIRT-BLK-M","quantity":1,"major_reason":"Size","minor_reason":"Too small"}]'&gt;&lt;/textarea&gt;</p>
-<p class="p1"><span class="Apple-converted-space">            </span>&lt;button class="bg-slate-900 text-white px-4 py-2 rounded"&gt;Import Returns&lt;/button&gt;</p>
-<p class="p1"><span class="Apple-converted-space">          </span>&lt;/form&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">      </span>`);</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>async function syncNow() {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>const btn = document.getElementById('sync-button');</p>
-<p class="p1"><span class="Apple-converted-space">      </span>btn.disabled = true;</p>
-<p class="p1"><span class="Apple-converted-space">      </span>btn.textContent = 'Syncing...';</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">      </span>try {</p>
-<p class="p1"><span class="Apple-converted-space">        </span>const res = await fetch('/.netlify/functions/sync?manual=1');</p>
-<p class="p1"><span class="Apple-converted-space">        </span>const data = await res.json();</p>
-<p class="p1"><span class="Apple-converted-space">        </span>if (!res.ok) throw new Error(data.error || 'Sync failed');</p>
-<p class="p1"><span class="Apple-converted-space">        </span>alert(`Sync completed.\nOrders imported: ${data.importedOrders || 0}\nReturns imported: ${data.importedReturns || 0}`);</p>
-<p class="p1"><span class="Apple-converted-space">        </span>await loadData();</p>
-<p class="p1"><span class="Apple-converted-space">      </span>} catch (err) {</p>
-<p class="p1"><span class="Apple-converted-space">        </span>alert(err.message || 'Sync failed');</p>
-<p class="p1"><span class="Apple-converted-space">      </span>} finally {</p>
-<p class="p1"><span class="Apple-converted-space">        </span>btn.disabled = false;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>btn.textContent = 'Sync now';</p>
-<p class="p1"><span class="Apple-converted-space">      </span>}</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>async function onClickAction(e) {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>const btn = e.target.closest('button[data-action]');</p>
-<p class="p1"><span class="Apple-converted-space">      </span>if (!btn) return;</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">      </span>const action = btn.dataset.action;</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">      </span>try {</p>
-<p class="p1"><span class="Apple-converted-space">        </span>if (action === 'dispatch') {</p>
-<p class="p1"><span class="Apple-converted-space">          </span>await apiPost('mark-dispatched', { order_db_id: Number(btn.dataset.id) });</p>
-<p class="p1"><span class="Apple-converted-space">          </span>await loadData();</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>if (action === 'classify') {</p>
-<p class="p1"><span class="Apple-converted-space">          </span>await apiPost('classify-return', {</p>
-<p class="p1"><span class="Apple-converted-space">            </span>return_db_id: Number(btn.dataset.id),</p>
-<p class="p1"><span class="Apple-converted-space">            </span>classification: btn.dataset.classification</p>
-<p class="p1"><span class="Apple-converted-space">          </span>});</p>
-<p class="p1"><span class="Apple-converted-space">          </span>await loadData();</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>if (action === 'map') {</p>
-<p class="p1"><span class="Apple-converted-space">          </span>const master = prompt('Enter Master SKU ID to map to:');</p>
-<p class="p1"><span class="Apple-converted-space">          </span>if (!master) return;</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">          </span>await apiPost('map-sku', {</p>
-<p class="p1"><span class="Apple-converted-space">            </span>platform: btn.dataset.platform,</p>
-<p class="p1"><span class="Apple-converted-space">            </span>platform_sku_id: btn.dataset.platformSku,</p>
-<p class="p1"><span class="Apple-converted-space">            </span>master_sku_id: master.trim()</p>
-<p class="p1"><span class="Apple-converted-space">          </span>});</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">          </span>await loadData();</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}</p>
-<p class="p1"><span class="Apple-converted-space">      </span>} catch (err) {</p>
-<p class="p1"><span class="Apple-converted-space">        </span>alert(err.message || 'Action failed');</p>
-<p class="p1"><span class="Apple-converted-space">      </span>}</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>async function onFormSubmit(e) {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>const form = e.target;</p>
-<p class="p1"><span class="Apple-converted-space">      </span>if (!form.dataset.form) return;</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">      </span>e.preventDefault();</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">      </span>const fd = new FormData(form);</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">      </span>try {</p>
-<p class="p1"><span class="Apple-converted-space">        </span>if (form.dataset.form === 'add-inventory') {</p>
-<p class="p1"><span class="Apple-converted-space">          </span>await apiPost('add-inventory', {</p>
-<p class="p1"><span class="Apple-converted-space">            </span>master_sku_id: fd.get('master_sku_id'),</p>
-<p class="p1"><span class="Apple-converted-space">            </span>quantity: Number(fd.get('quantity') || 0),</p>
-<p class="p1"><span class="Apple-converted-space">            </span>note: fd.get('note') || ''</p>
-<p class="p1"><span class="Apple-converted-space">          </span>});</p>
-<p class="p1"><span class="Apple-converted-space">          </span>alert('Inventory saved.');</p>
-<p class="p1"><span class="Apple-converted-space">          </span>await loadData();</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>if (form.dataset.form === 'process-to-sellable') {</p>
-<p class="p1"><span class="Apple-converted-space">          </span>await apiPost('process-to-sellable', {</p>
-<p class="p1"><span class="Apple-converted-space">            </span>master_sku_id: fd.get('master_sku_id'),</p>
-<p class="p1"><span class="Apple-converted-space">            </span>quantity: Number(fd.get('quantity') || 0)</p>
-<p class="p1"><span class="Apple-converted-space">          </span>});</p>
-<p class="p1"><span class="Apple-converted-space">          </span>alert('Processing stock moved to sellable.');</p>
-<p class="p1"><span class="Apple-converted-space">          </span>await loadData();</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>if (form.dataset.form === 'add-manufacturing') {</p>
-<p class="p1"><span class="Apple-converted-space">          </span>await apiPost('add-manufacturing', {</p>
-<p class="p1"><span class="Apple-converted-space">            </span>master_sku_id: fd.get('master_sku_id'),</p>
-<p class="p1"><span class="Apple-converted-space">            </span>quantity: Number(fd.get('quantity') || 0)</p>
-<p class="p1"><span class="Apple-converted-space">          </span>});</p>
-<p class="p1"><span class="Apple-converted-space">          </span>alert('Manufactured stock added.');</p>
-<p class="p1"><span class="Apple-converted-space">          </span>await loadData();</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>if (form.dataset.form === 'import-orders') {</p>
-<p class="p1"><span class="Apple-converted-space">          </span>const parsed = JSON.parse(fd.get('orders_json') || '[]');</p>
-<p class="p1"><span class="Apple-converted-space">          </span>const orders = Array.isArray(parsed) ? parsed : parsed.orders || [];</p>
-<p class="p1"><span class="Apple-converted-space">          </span>const result = await apiPost('import-orders', { orders });</p>
-<p class="p1"><span class="Apple-converted-space">          </span>alert(`Orders imported: ${result.imported || 0}`);</p>
-<p class="p1"><span class="Apple-converted-space">          </span>await loadData();</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>if (form.dataset.form === 'import-returns') {</p>
-<p class="p1"><span class="Apple-converted-space">          </span>const parsed = JSON.parse(fd.get('returns_json') || '[]');</p>
-<p class="p1"><span class="Apple-converted-space">          </span>const returns = Array.isArray(parsed) ? parsed : parsed.returns || [];</p>
-<p class="p1"><span class="Apple-converted-space">          </span>const result = await apiPost('import-returns', { returns });</p>
-<p class="p1"><span class="Apple-converted-space">          </span>alert(`Returns imported: ${result.imported || 0}`);</p>
-<p class="p1"><span class="Apple-converted-space">          </span>await loadData();</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}</p>
-<p class="p1"><span class="Apple-converted-space">      </span>} catch (err) {</p>
-<p class="p1"><span class="Apple-converted-space">        </span>alert(err.message || 'Save failed');</p>
-<p class="p1"><span class="Apple-converted-space">      </span>}</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>function onContentChange(e) {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>const control = e.target.dataset?.control;</p>
-<p class="p1"><span class="Apple-converted-space">      </span>if (!control) return;</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">      </span>if (control === 'mfg-weeks') {</p>
-<p class="p1"><span class="Apple-converted-space">        </span>mfgParams.weeks = Number(e.target.value);</p>
-<p class="p1"><span class="Apple-converted-space">        </span>loadData();</p>
-<p class="p1"><span class="Apple-converted-space">      </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">      </span>if (control === 'mfg-method') {</p>
-<p class="p1"><span class="Apple-converted-space">        </span>mfgParams.method = e.target.value;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>loadData();</p>
-<p class="p1"><span class="Apple-converted-space">      </span>}</p>
-<p class="p1"><span class="Apple-converted-space">    </span>}</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>document.getElementById('nav').addEventListener('click', e =&gt; {</p>
-<p class="p1"><span class="Apple-converted-space">      </span>const btn = e.target.closest('button[data-tab]');</p>
-<p class="p1"><span class="Apple-converted-space">      </span>if (btn) setTab(btn.dataset.tab);</p>
-<p class="p1"><span class="Apple-converted-space">    </span>});</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>document.getElementById('content').addEventListener('click', onClickAction);</p>
-<p class="p1"><span class="Apple-converted-space">    </span>document.getElementById('content').addEventListener('submit', onFormSubmit);</p>
-<p class="p1"><span class="Apple-converted-space">    </span>document.getElementById('content').addEventListener('change', onContentChange);</p>
-<p class="p1"><span class="Apple-converted-space">    </span>document.getElementById('sync-button').addEventListener('click', syncNow);</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">    </span>renderNav();</p>
-<p class="p1"><span class="Apple-converted-space">    </span>setTab('dashboard');</p>
-<p class="p1"><span class="Apple-converted-space">  </span>&lt;/script&gt;</p>
-<p class="p1">&lt;/body&gt;</p>
-<p class="p1">&lt;/html&gt;</p>
+<body class="bg-slate-100 text-slate-900">
+  <header class="bg-slate-900 text-white p-4 flex flex-wrap gap-3 items-center justify-between">
+    <div>
+      <h1 class="text-xl font-bold">Inventory & Manufacturing OS</h1>
+      <p class="text-xs text-slate-300">
+        Orders, returns, inventory, forecast, and manufacturing plan
+      </p>
+    </div>
+    <div class="flex items-center gap-3">
+      <span id="last-updated" class="text-xs text-slate-300"></span>
+      <button id="sync-button" class="bg-emerald-500 hover:bg-emerald-600 px-3 py-2 rounded text-sm font-semibold">
+        Sync now
+      </button>
+    </div>
+  </header>
+
+  <nav id="nav" class="p-4 flex flex-wrap gap-2"></nav>
+  <main id="content" class="p-4"></main>
+
+  <script>
+    const api = '/.netlify/functions/api';
+
+    const tabs = [
+      ['dashboard', 'Dashboard'],
+      ['packing', 'Packing Queue'],
+      ['returns', 'Return Processing'],
+      ['inventory', 'Inventory'],
+      ['manufacturing', 'Manufacturing Plan'],
+      ['sku', 'SKU Master'],
+      ['exceptions', 'Exceptions'],
+      ['sync', 'Sync Logs'],
+      ['import', 'Import']
+    ];
+
+    let currentTab = 'dashboard';
+    let timer = null;
+    let mfgParams = { weeks: 4, method: '13W' };
+
+    function esc(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function setContent(html) {
+      document.getElementById('content').innerHTML = html;
+    }
+
+    function showError(err) {
+      setContent(`
+        <div class="bg-red-100 border border-red-300 text-red-800 p-4 rounded">
+          <div class="font-bold">Error</div>
+          <div>${esc(err.message || err)}</div>
+        </div>
+      `);
+    }
+
+    async function apiGet(resource, params = {}) {
+      const qs = new URLSearchParams({ resource, ...params });
+      const res = await fetch(`${api}?${qs.toString()}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Request failed with status ${res.status}`);
+      return data;
+    }
+
+    async function apiPost(action, body = {}) {
+      const res = await fetch(api, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ...body })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Request failed with status ${res.status}`);
+      return data;
+    }
+
+    function renderNav() {
+      const html = tabs.map(([key, label]) => {
+        const active = key === currentTab;
+        return `
+          <button
+            data-tab="${key}"
+            class="px-4 py-2 rounded ${active ? 'bg-slate-900 text-white' : 'bg-white text-slate-800 hover:bg-slate-200'}"
+          >
+            ${esc(label)}
+          </button>
+        `;
+      }).join('');
+      document.getElementById('nav').innerHTML = html;
+    }
+
+    function setTab(tab) {
+      currentTab = tab;
+      renderNav();
+      loadData();
+
+      if (timer) clearInterval(timer);
+      const interval = tab === 'packing' ? 15000 : 60000;
+      timer = setInterval(loadData, interval);
+    }
+
+    async function loadData() {
+      try {
+        document.getElementById('last-updated').textContent =
+          `Updated ${new Date().toLocaleTimeString()}`;
+
+        if (currentTab === 'dashboard') {
+          const data = await apiGet('dashboard');
+          renderDashboard(data);
+        }
+
+        if (currentTab === 'packing') {
+          const data = await apiGet('packing-queue');
+          renderPacking(data);
+        }
+
+        if (currentTab === 'returns') {
+          const data = await apiGet('returns-pending');
+          renderReturns(data);
+        }
+
+        if (currentTab === 'inventory') {
+          const [inventory, skus] = await Promise.all([
+            apiGet('inventory'),
+            apiGet('sku-master')
+          ]);
+          renderInventory(inventory, skus);
+        }
+
+        if (currentTab === 'manufacturing') {
+          const data = await apiGet('manufacturing-plan', mfgParams);
+          renderManufacturing(data);
+        }
+
+        if (currentTab === 'sku') {
+          const data = await apiGet('sku-master');
+          renderSkuMaster(data);
+        }
+
+        if (currentTab === 'exceptions') {
+          const data = await apiGet('exceptions');
+          renderExceptions(data);
+        }
+
+        if (currentTab === 'sync') {
+          const data = await apiGet('sync-logs');
+          renderSyncLogs(data);
+        }
+
+        if (currentTab === 'import') {
+          renderImport();
+        }
+      } catch (err) {
+        showError(err);
+      }
+    }
+
+    function card(label, value, sub = '') {
+      return `
+        <div class="bg-white rounded shadow p-4">
+          <div class="text-sm text-slate-500">${esc(label)}</div>
+          <div class="text-2xl font-bold">${esc(value ?? 0)}</div>
+          ${sub ? `<div class="text-xs text-slate-400 mt-1">${esc(sub)}</div>` : ''}
+        </div>
+      `;
+    }
+
+    function table(rows, columns, emptyMessage = 'No records found') {
+      if (!rows || !rows.length) {
+        return `<div class="bg-white rounded shadow p-4 text-slate-500">${esc(emptyMessage)}</div>`;
+      }
+
+      const head = columns.map(col => `<th class="text-left p-3 border-b">${esc(col.label)}</th>`).join('');
+      const body = rows.map(row => {
+        const cells = columns.map(col => {
+          const value = col.render ? col.render(row) : row[col.key];
+          return `<td class="p-3 border-b align-top">${value}</td>`;
+        }).join('');
+        return `<tr>${cells}</tr>`;
+      }).join('');
+
+      return `
+        <div class="overflow-auto bg-white rounded shadow">
+          <table class="min-w-full text-sm">
+            <thead class="bg-slate-50">
+              <tr>${head}</tr>
+            </thead>
+            <tbody>${body}</tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    function normalizeSummary(input) {
+      if (!input) return {};
+      if (Array.isArray(input)) input = input[0];
+      if (input && input.dashboard_summary) return input.dashboard_summary;
+      return input;
+    }
+
+    function renderDashboard(data) {
+      const s = normalizeSummary(data);
+
+      setContent(`
+        <div class="grid gap-3 md:grid-cols-3 xl:grid-cols-4">
+          ${card('Gross Orders', s.gross_order_units, 'All imported order units')}
+          ${card('Pre-Dispatch Cancellations', s.pre_dispatch_cancel_units, 'Cancelled before dispatch')}
+          ${card('Net Demand', s.net_demand_units, 'Gross orders minus pre-dispatch cancellations')}
+          ${card('Returns', s.return_units, 'All imported return units')}
+          ${card('Return Rate', `${s.return_rate ?? 0}%`, 'Returns / gross orders')}
+          ${card('Sellable Inventory', s.sellable_inventory, 'Available for sale')}
+          ${card('Processing Inventory', s.processing_inventory, 'Press / dry cleaning / processing')}
+          ${card('SPF Claim Inventory', s.spf_claim_inventory, 'Blocked under claim')}
+          ${card('SKUs Short', s.shortage_skus, 'SKUs needing manufacture')}
+          ${card('Pieces to Manufacture', s.total_manufacture_pieces, 'Total recommended production')}
+        </div>
+
+        <div class="mt-4 bg-blue-50 border border-blue-200 text-blue-900 p-4 rounded">
+          <div class="font-semibold">How this works</div>
+          <div class="mt-2 text-sm leading-6">
+            Forecast Demand = Moving Average of Gross Orders minus Pre-Dispatch Cancellations.<br />
+            Returns are analyzed separately and do not reduce the primary forecast demand.<br />
+            Manufacturing Quantity = MAX(0, Forecast Required Inventory - Actual Usable Inventory).<br />
+            Actual Usable Inventory = Sellable Inventory only. Processing and SPF claim stock are excluded.
+          </div>
+        </div>
+      `);
+    }
+
+    function renderPacking(rows) {
+      const columns = [
+        { label: 'Platform', key: 'platform' },
+        { label: 'Order Date', render: r => esc(new Date(r.order_date).toLocaleString()) },
+        { label: 'Order ID', render: r => esc(r.order_id) },
+        { label: 'SKU', render: r => esc(r.platform_sku_id) },
+        { label: 'Master SKU', render: r => esc(r.master_sku_id || 'Unmapped') },
+        { label: 'Product', render: r => esc(r.product_name || '-') },
+        { label: 'Qty', key: 'quantity' },
+        { label: 'Region', render: r => esc(r.region || '-') },
+        { label: 'Dispatch Status', render: r => esc(r.dispatch_status || 'Pending') },
+        {
+          label: 'Action',
+          render: r => {
+            if ((r.dispatch_status || '').toLowerCase() === 'dispatched') {
+              return `<span class="text-emerald-700 font-semibold">Dispatched</span>`;
+            }
+            return `
+              <button
+                data-action="dispatch"
+                data-id="${r.id}"
+                class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded"
+              >
+                Mark Dispatched
+              </button>
+            `;
+          }
+        }
+      ];
+
+      setContent(`
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-lg font-bold">Packing Queue</h2>
+          <div class="text-sm text-slate-500">Refreshes every 15 seconds</div>
+        </div>
+        ${table(rows, columns, 'No pending orders found. Click Sync now if you expected orders.')}
+      `);
+    }
+
+    function renderReturns(rows) {
+      const columns = [
+        { label: 'Platform', key: 'platform' },
+        { label: 'Return Date', render: r => esc(new Date(r.return_date).toLocaleString()) },
+        { label: 'Return ID', render: r => esc(r.return_id) },
+        { label: 'Order ID', render: r => esc(r.order_id) },
+        { label: 'SKU', render: r => esc(r.platform_sku_id) },
+        { label: 'Master SKU', render: r => esc(r.master_sku_id || 'Unmapped') },
+        { label: 'Qty', key: 'quantity' },
+        { label: 'Region', render: r => esc(r.region || '-') },
+        { label: 'Major Reason', render: r => esc(r.major_reason || '-') },
+        { label: 'Minor Reason', render: r => esc(r.minor_reason || '-') },
+        {
+          label: 'Classify',
+          render: r => `
+            <div class="flex flex-wrap gap-2">
+              <button data-action="classify" data-id="${r.id}" data-classification="sellable"
+                class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded">
+                Sellable
+              </button>
+              <button data-action="classify" data-id="${r.id}" data-classification="processing"
+                class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1 rounded">
+                Needs Press / Dry Cleaning
+              </button>
+              <button data-action="classify" data-id="${r.id}" data-classification="spf"
+                class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded">
+                SPF Claim
+              </button>
+            </div>
+          `
+        }
+      ];
+
+      setContent(`
+        <div class="mb-3">
+          <h2 class="text-lg font-bold">Return Processing</h2>
+          <p class="text-sm text-slate-500">
+            Sellable increases sellable inventory. Processing keeps stock blocked until processed. SPF Claim blocks stock and creates a claim.
+          </p>
+        </div>
+        ${table(rows, columns, 'No pending returns found.')}
+      `);
+    }
+
+    function skuSelectOptions(skus) {
+      return (skus || [])
+        .map(s => `<option value="${esc(s.master_sku_id)}">${esc(s.master_sku_id)} - ${esc(s.product_name)}</option>`)
+        .join('');
+    }
+
+    function renderInventory(inventory, skus) {
+      const columns = [
+        { label: 'Master SKU', key: 'master_sku_id' },
+        { label: 'Product', render: r => esc(r.sku_master?.product_name || '-') },
+        { label: 'Variant', render: r => esc(r.sku_master?.variant_attributes || '-') },
+        { label: 'Sellable', key: 'sellable_stock' },
+        { label: 'Processing', key: 'processing_stock' },
+        { label: 'SPF Claim', key: 'spf_claim_stock' },
+        { label: 'Total Physical', render: r => Number(r.sellable_stock || 0) + Number(r.processing_stock || 0) + Number(r.spf_claim_stock || 0) },
+        { label: 'Updated', render: r => esc(r.updated_at ? new Date(r.updated_at).toLocaleString() : '-') }
+      ];
+
+      const options = skuSelectOptions(skus);
+
+      setContent(`
+        <div class="grid gap-4 xl:grid-cols-[2fr_1fr]">
+          <div>
+            <h2 class="text-lg font-bold mb-3">Inventory Balances</h2>
+            ${table(inventory, columns, 'No inventory records found.')}
+          </div>
+
+          <div class="space-y-4">
+            <form data-form="add-inventory" class="bg-white rounded shadow p-4 space-y-3">
+              <h3 class="font-bold">Add / Adjust Sellable Inventory</h3>
+              <select name="master_sku_id" required class="w-full border rounded p-2">
+                <option value="">Select SKU</option>
+                ${options}
+              </select>
+              <input name="quantity" type="number" required placeholder="Quantity, use negative to reduce" class="w-full border rounded p-2" />
+              <input name="note" type="text" placeholder="Note / reason" class="w-full border rounded p-2" />
+              <button class="bg-slate-900 text-white px-4 py-2 rounded w-full">Save Inventory</button>
+            </form>
+
+            <form data-form="process-to-sellable" class="bg-white rounded shadow p-4 space-y-3">
+              <h3 class="font-bold">Mark Processed Items Sellable</h3>
+              <p class="text-sm text-slate-500">
+                Moves quantity from Processing to Sellable.
+              </p>
+              <select name="master_sku_id" required class="w-full border rounded p-2">
+                <option value="">Select SKU</option>
+                ${options}
+              </select>
+              <input name="quantity" type="number" min="1" required placeholder="Quantity" class="w-full border rounded p-2" />
+              <button class="bg-emerald-600 text-white px-4 py-2 rounded w-full">Mark as Sellable</button>
+            </form>
+
+            <form data-form="add-manufacturing" class="bg-white rounded shadow p-4 space-y-3">
+              <h3 class="font-bold">Add Manufactured Stock</h3>
+              <p class="text-sm text-slate-500">
+                Adds finished goods into sellable inventory.
+              </p>
+              <select name="master_sku_id" required class="w-full border rounded p-2">
+                <option value="">Select SKU</option>
+                ${options}
+              </select>
+              <input name="quantity" type="number" min="1" required placeholder="Quantity" class="w-full border rounded p-2" />
+              <button class="bg-blue-600 text-white px-4 py-2 rounded w-full">Add Production Stock</button>
+            </form>
+          </div>
+        </div>
+      `);
+    }
+
+    function renderManufacturing(rows) {
+      const columns = [
+        { label: 'Master SKU', key: 'master_sku_id' },
+        { label: 'Product', render: r => esc(r.product_name || '-') },
+        { label: '3M SMA', render: r => esc(Number(r.sma_3m || 0).toFixed(2)) },
+        { label: '13W SMA', render: r => esc(Number(r.sma_13w || 0).toFixed(2)) },
+        { label: 'Forecast Required', render: r => esc(Number(r.forecast_required || 0).toFixed(2)) },
+        { label: 'Usable Stock', key: 'actual_usable_stock' },
+        { label: 'Gap', render: r => esc(Number(r.inventory_gap || 0).toFixed(2)) },
+        {
+          label: 'Verdict',
+          render: r => {
+            if (r.verdict === 'Manufacturing Required') {
+              return `<span class="bg-red-100 text-red-700 px-2 py-1 rounded font-semibold">Manufacturing Required</span>`;
+            }
+            return `<span class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-semibold">Inventory OK</span>`;
+          }
+        },
+        { label: 'Pieces to Manufacture', key: 'pieces_to_manufacture' }
+      ];
+
+      setContent(`
+        <div class="bg-white rounded shadow p-4 mb-4">
+          <div class="grid gap-3 md:grid-cols-3 items-end">
+            <div>
+              <label class="text-sm text-slate-500 block mb-1">Planning Horizon</label>
+              <select data-control="mfg-weeks" class="w-full border rounded p-2">
+                ${[1, 2, 4, 8, 13].map(v => `
+                  <option value="${v}" ${Number(mfgParams.weeks) === v ? 'selected' : ''}>
+                    ${v} week${v > 1 ? 's' : ''}
+                  </option>
+                `).join('')}
+              </select>
+            </div>
+            <div>
+              <label class="text-sm text-slate-500 block mb-1">Forecast Method</label>
+              <select data-control="mfg-method" class="w-full border rounded p-2">
+                <option value="13W" ${mfgParams.method === '13W' ? 'selected' : ''}>13-week SMA</option>
+                <option value="3M" ${mfgParams.method === '3M' ? 'selected' : ''}>3-month SMA</option>
+              </select>
+            </div>
+            <div class="text-sm text-slate-500">
+              Required Forecast Quantity = Weekly SMA × Planning Weeks.
+              For 3-month SMA, monthly average is converted to weekly.
+            </div>
+          </div>
+        </div>
+
+        ${table(rows, columns, 'No manufacturing recommendations found.')}
+      `);
+    }
+
+    function renderSkuMaster(rows) {
+      const columns = [
+        { label: 'Master SKU', key: 'master_sku_id' },
+        { label: 'Product', key: 'product_name' },
+        { label: 'Variant', render: r => esc(r.variant_attributes || '-') },
+        { label: 'Status', key: 'status' },
+        { label: 'Created', render: r => esc(new Date(r.created_at).toLocaleString()) }
+      ];
+
+      setContent(`
+        <h2 class="text-lg font-bold mb-3">SKU Master</h2>
+        ${table(rows, columns, 'No SKUs found.')}
+      `);
+    }
+
+    function renderExceptions(data) {
+      const negativeColumns = [
+        { label: 'Master SKU', key: 'master_sku_id' },
+        { label: 'Sellable', key: 'sellable_stock' },
+        { label: 'Processing', key: 'processing_stock' },
+        { label: 'SPF Claim', key: 'spf_claim_stock' }
+      ];
+
+      const unmappedColumns = [
+        { label: 'Platform', key: 'platform' },
+        { label: 'Platform SKU', key: 'platform_sku_id' },
+        { label: 'Product', render: r => esc(r.product_name || '-') },
+        { label: 'Seen Count', key: 'occurrences' },
+        { label: 'Last Seen', render: r => esc(new Date(r.last_seen).toLocaleString()) },
+        {
+          label: 'Map',
+          render: r => `
+            <button
+              data-action="map"
+              data-platform="${esc(r.platform)}"
+              data-platform-sku="${esc(r.platform_sku_id)}"
+              class="bg-slate-900 text-white px-3 py-1 rounded"
+            >
+              Map SKU
+            </button>
+          `
+        }
+      ];
+
+      setContent(`
+        <div class="space-y-6">
+          <div>
+            <h2 class="text-lg font-bold mb-3">Unmapped SKUs</h2>
+            ${table(data.unmapped_skus || [], unmappedColumns, 'No unmapped SKUs found.')}
+          </div>
+
+          <div>
+            <h2 class="text-lg font-bold mb-3">Negative Inventory</h2>
+            ${table(data.negative_inventory || [], negativeColumns, 'No negative inventory found.')}
+          </div>
+        </div>
+      `);
+    }
+
+    function renderSyncLogs(rows) {
+      const columns = [
+        { label: 'Started', render: r => esc(new Date(r.started_at).toLocaleString()) },
+        { label: 'Finished', render: r => esc(r.finished_at ? new Date(r.finished_at).toLocaleString() : '-') },
+        { label: 'Platform', key: 'platform' },
+        { label: 'Status', key: 'status' },
+        { label: 'Records Imported', key: 'records_imported' },
+        { label: 'Error', render: r => esc(r.error || '-') }
+      ];
+
+      setContent(`
+        <div class="mb-3 bg-white rounded shadow p-4">
+          <div class="font-bold">Automatic Sync</div>
+          <div class="text-sm text-slate-500 mt-1">
+            The sync function runs every 2 minutes. It reads Amazon/Flipkart JSON sources or the demo files in the data folder.
+          </div>
+        </div>
+        ${table(rows, columns, 'No sync logs found.')}
+      `);
+    }
+
+    function renderImport() {
+      setContent(`
+        <div class="grid gap-4 xl:grid-cols-2">
+          <form data-form="import-orders" class="bg-white rounded shadow p-4 space-y-3">
+            <h3 class="font-bold">Import Orders JSON</h3>
+            <p class="text-sm text-slate-500">
+              Paste an array of order objects. Required fields:
+              platform, order_id, order_line_id, order_date, platform_sku_id, quantity.
+            </p>
+            <textarea name="orders_json" rows="12" class="w-full border rounded p-2 font-mono text-xs" placeholder='[{"platform":"Amazon","order_id":"123","order_line_id":"1","order_date":"2026-06-16T10:00:00Z","platform_sku_id":"AMZ-TSHIRT-BLK-M","quantity":1}]'></textarea>
+            <button class="bg-slate-900 text-white px-4 py-2 rounded">Import Orders</button>
+          </form>
+
+          <form data-form="import-returns" class="bg-white rounded shadow p-4 space-y-3">
+            <h3 class="font-bold">Import Returns JSON</h3>
+            <p class="text-sm text-slate-500">
+              Paste an array of return objects. Required fields:
+              platform, return_id, order_id, return_date, platform_sku_id, quantity.
+            </p>
+            <textarea name="returns_json" rows="12" class="w-full border rounded p-2 font-mono text-xs" placeholder='[{"platform":"Amazon","return_id":"RET123","order_id":"123","return_date":"2026-06-16T10:00:00Z","platform_sku_id":"AMZ-TSHIRT-BLK-M","quantity":1,"major_reason":"Size","minor_reason":"Too small"}]'></textarea>
+            <button class="bg-slate-900 text-white px-4 py-2 rounded">Import Returns</button>
+          </form>
+        </div>
+      `);
+    }
+
+    async function syncNow() {
+      const btn = document.getElementById('sync-button');
+      btn.disabled = true;
+      btn.textContent = 'Syncing...';
+
+      try {
+        const res = await fetch('/.netlify/functions/sync?manual=1');
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Sync failed');
+        alert(`Sync completed.\nOrders imported: ${data.importedOrders || 0}\nReturns imported: ${data.importedReturns || 0}`);
+        await loadData();
+      } catch (err) {
+        alert(err.message || 'Sync failed');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Sync now';
+      }
+    }
+
+    async function onClickAction(e) {
+      const btn = e.target.closest('button[data-action]');
+      if (!btn) return;
+
+      const action = btn.dataset.action;
+
+      try {
+        if (action === 'dispatch') {
+          await apiPost('mark-dispatched', { order_db_id: Number(btn.dataset.id) });
+          await loadData();
+        }
+
+        if (action === 'classify') {
+          await apiPost('classify-return', {
+            return_db_id: Number(btn.dataset.id),
+            classification: btn.dataset.classification
+          });
+          await loadData();
+        }
+
+        if (action === 'map') {
+          const master = prompt('Enter Master SKU ID to map to:');
+          if (!master) return;
+
+          await apiPost('map-sku', {
+            platform: btn.dataset.platform,
+            platform_sku_id: btn.dataset.platformSku,
+            master_sku_id: master.trim()
+          });
+
+          await loadData();
+        }
+      } catch (err) {
+        alert(err.message || 'Action failed');
+      }
+    }
+
+    async function onFormSubmit(e) {
+      const form = e.target;
+      if (!form.dataset.form) return;
+
+      e.preventDefault();
+
+      const fd = new FormData(form);
+
+      try {
+        if (form.dataset.form === 'add-inventory') {
+          await apiPost('add-inventory', {
+            master_sku_id: fd.get('master_sku_id'),
+            quantity: Number(fd.get('quantity') || 0),
+            note: fd.get('note') || ''
+          });
+          alert('Inventory saved.');
+          await loadData();
+        }
+
+        if (form.dataset.form === 'process-to-sellable') {
+          await apiPost('process-to-sellable', {
+            master_sku_id: fd.get('master_sku_id'),
+            quantity: Number(fd.get('quantity') || 0)
+          });
+          alert('Processing stock moved to sellable.');
+          await loadData();
+        }
+
+        if (form.dataset.form === 'add-manufacturing') {
+          await apiPost('add-manufacturing', {
+            master_sku_id: fd.get('master_sku_id'),
+            quantity: Number(fd.get('quantity') || 0)
+          });
+          alert('Manufactured stock added.');
+          await loadData();
+        }
+
+        if (form.dataset.form === 'import-orders') {
+          const parsed = JSON.parse(fd.get('orders_json') || '[]');
+          const orders = Array.isArray(parsed) ? parsed : parsed.orders || [];
+          const result = await apiPost('import-orders', { orders });
+          alert(`Orders imported: ${result.imported || 0}`);
+          await loadData();
+        }
+
+        if (form.dataset.form === 'import-returns') {
+          const parsed = JSON.parse(fd.get('returns_json') || '[]');
+          const returns = Array.isArray(parsed) ? parsed : parsed.returns || [];
+          const result = await apiPost('import-returns', { returns });
+          alert(`Returns imported: ${result.imported || 0}`);
+          await loadData();
+        }
+      } catch (err) {
+        alert(err.message || 'Save failed');
+      }
+    }
+
+    function onContentChange(e) {
+      const control = e.target.dataset?.control;
+      if (!control) return;
+
+      if (control === 'mfg-weeks') {
+        mfgParams.weeks = Number(e.target.value);
+        loadData();
+      }
+
+      if (control === 'mfg-method') {
+        mfgParams.method = e.target.value;
+        loadData();
+      }
+    }
+
+    document.getElementById('nav').addEventListener('click', e => {
+      const btn = e.target.closest('button[data-tab]');
+      if (btn) setTab(btn.dataset.tab);
+    });
+
+    document.getElementById('content').addEventListener('click', onClickAction);
+    document.getElementById('content').addEventListener('submit', onFormSubmit);
+    document.getElementById('content').addEventListener('change', onContentChange);
+    document.getElementById('sync-button').addEventListener('click', syncNow);
+
+    renderNav();
+    setTab('dashboard');
+  </script>
 </body>
 </html>
