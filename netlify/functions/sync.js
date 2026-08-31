@@ -17,14 +17,8 @@ function parseDate(value) {
   return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
 }
 
-function daysAgo(days) {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString();
-}
-
 // ============================================================
-// FLIPKART API
+// FLIPKART API (CORRECTED URLs)
 // ============================================================
 async function getFlipkartToken() {
   const consumerId = process.env.FLIPKART_CONSUMER_ID;
@@ -35,13 +29,14 @@ async function getFlipkartToken() {
   }
 
   try {
-    const response = await fetch('https://api.flipkart.net/sellers/v2/auth/token', {
+    // Corrected Flipkart Auth URL for v3 API
+    const response = await fetch('https://api.flipkart.net/oauth-service/oauth/token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': 'Basic ' + Buffer.from(consumerId + ':' + consumerSecret).toString('base64')
       },
-      body: 'grant_type=client_credentials&scope=Seller_Api'
+      body: 'grant_type=client_credentials'
     });
 
     if (!response.ok) {
@@ -62,8 +57,8 @@ async function fetchFlipkartOrders(token) {
   if (!token) return [];
 
   try {
-    const fromDate = daysAgo(3);
-    const response = await fetch('https://api.flipkart.net/sellers/v3/orders/search', {
+    // Corrected Flipkart Orders/Shipments URL
+    const response = await fetch('https://api.flipkart.net/sellers/v3/shipments/filter/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -71,13 +66,8 @@ async function fetchFlipkartOrders(token) {
       },
       body: JSON.stringify({
         filter: {
-          orderDate: {
-            fromDate: fromDate,
-            toDate: new Date().toISOString()
-          }
-        },
-        sort: { orderDate: 'desc' },
-        paging: { pageSize: 100 }
+          // Fetching recent shipments
+        }
       })
     });
 
@@ -87,25 +77,30 @@ async function fetchFlipkartOrders(token) {
     }
 
     const data = await response.json();
-    const orders = data.orderItems || data.orders || [];
+    const shipments = data.shipments || data.orderItems || [];
 
-    return orders.map(order => ({
-      platform: 'Flipkart',
-      order_id: String(order.orderId || order.order_id || ''),
-      order_line_id: String(order.orderItemId || order.order_item_id || order.orderId || ''),
-      order_date: parseDate(order.orderDate || order.order_date),
-      platform_sku_id: String(order.sellerSku || order.seller_sku || order.sku || ''),
-      product_name: order.productName || order.product_name || '',
-      quantity: Number(order.quantity || order.qty || 1),
-      selling_price: order.sellingPrice || order.selling_price || null,
-      region: order.shippingRegion || order.region || order.state || null,
-      status: order.orderStatus || order.status || 'Pending',
-      dispatch_status: order.fulfilmentType || 'Pending',
-      is_cancelled_pre_dispatch: ['CANCELLED', 'CUSTOMER_CANCELLED'].includes(
-        String(order.orderStatus || '').toUpperCase()
-      ),
-      cancellation_date: order.cancellationDate || null
-    }));
+    // Flatten the shipments array (one shipment might have multiple items)
+    return shipments.flatMap(shipment => {
+      const orderItems = shipment.orderItems || [shipment];
+      
+      return orderItems.map(item => ({
+        platform: 'Flipkart',
+        order_id: String(shipment.orderId || shipment.fsnId || ''),
+        order_line_id: String(item.orderItemId || item.sku || item.orderId || ''),
+        order_date: parseDate(shipment.orderDate || shipment.createdAt),
+        platform_sku_id: String(item.sellerSku || item.sku || shipment.sku || ''),
+        product_name: item.productName || item.title || shipment.productName || '',
+        quantity: Number(item.quantity || shipment.quantity || 1),
+        selling_price: item.sellingPrice || item.price || null,
+        region: shipment.shippingRegion || shipment.region || null,
+        status: shipment.shipmentStatus || shipment.status || 'Pending',
+        dispatch_status: shipment.fulfilmentType || 'Pending',
+        is_cancelled_pre_dispatch: ['CANCELLED', 'CUSTOMER_CANCELLED'].includes(
+          String(shipment.shipmentStatus || shipment.status || '').toUpperCase()
+        ),
+        cancellation_date: shipment.cancellationDate || null
+      }));
+    });
   } catch (err) {
     console.error('Flipkart orders error:', err.message);
     return [];
@@ -113,58 +108,13 @@ async function fetchFlipkartOrders(token) {
 }
 
 async function fetchFlipkartReturns(token) {
-  if (!token) return [];
-
-  try {
-    const fromDate = daysAgo(30);
-    const response = await fetch('https://api.flipkart.net/sellers/v3/returns/search', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token
-      },
-      body: JSON.stringify({
-        filter: {
-          returnCreationDate: {
-            fromDate: fromDate,
-            toDate: new Date().toISOString()
-          }
-        },
-        sort: { returnCreationDate: 'desc' },
-        paging: { pageSize: 100 }
-      })
-    });
-
-    if (!response.ok) {
-      console.error('Flipkart returns failed:', response.status);
-      return [];
-    }
-
-    const data = await response.json();
-    const returns = data.returnItems || data.returns || [];
-
-    return returns.map(ret => ({
-      platform: 'Flipkart',
-      return_id: String(ret.returnId || ret.return_id || ''),
-      order_id: String(ret.orderId || ret.order_id || ''),
-      return_date: parseDate(ret.returnCreationDate || ret.return_date),
-      order_date: ret.orderDate ? parseDate(ret.orderDate) : null,
-      platform_sku_id: String(ret.sellerSku || ret.seller_sku || ret.sku || ''),
-      product_name: ret.productName || '',
-      quantity: Number(ret.quantity || ret.qty || 1),
-      region: ret.shippingRegion || null,
-      major_reason: ret.returnReason || ret.reason || null,
-      minor_reason: ret.returnSubReason || null,
-      status: ret.returnStatus || 'Pending'
-    }));
-  } catch (err) {
-    console.error('Flipkart returns error:', err.message);
-    return [];
-  }
+  // Flipkart Returns API uses a complex "task" system. 
+  // For now, we skip it to focus on getting Orders working for packing.
+  return [];
 }
 
 // ============================================================
-// AMAZON API (simplified - token exchange only)
+// AMAZON API (Token exchange only)
 // ============================================================
 async function fetchAmazonOrders() {
   const clientId = process.env.AMAZON_CLIENT_ID;
@@ -194,11 +144,7 @@ async function fetchAmazonOrders() {
 
     const tokenData = await tokenResponse.json();
     console.log('Amazon token obtained successfully');
-
-    // NOTE: Full Amazon SP-API requires AWS Signature V4 signing.
-    // For now, we log that auth works.
-    // Full order fetching will be added once Flipkart is confirmed working.
-    return [];
+    return []; // Full order fetching requires AWS Signature V4 signing
   } catch (err) {
     console.error('Amazon error:', err.message);
     return [];
@@ -335,7 +281,6 @@ exports.handler = async (event) => {
     };
 
   } catch (err) {
-    // Try to log even if everything failed
     try {
       if (client) {
         await client.from('sync_logs').insert({
