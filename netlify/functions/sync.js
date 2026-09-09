@@ -18,7 +18,7 @@ function parseDate(value) {
 }
 
 // ============================================================
-// FLIPKART API (CORRECTED URLs)
+// FLIPKART API (CORRECTED - GET METHOD)
 // ============================================================
 async function getFlipkartToken() {
   const consumerId = process.env.FLIPKART_CONSUMER_ID;
@@ -29,15 +29,18 @@ async function getFlipkartToken() {
   }
 
   try {
-    // Corrected Flipkart Auth URL for v3 API
-    const response = await fetch('https://api.flipkart.net/oauth-service/oauth/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'Authorization': 'Basic ' + Buffer.from(consumerId + ':' + consumerSecret).toString('base64')
-      },
-      body: 'grant_type=client_credentials'
-    });
+    // CORRECTED: Use GET method with query parameter, not POST with body
+    // Based on official Flipkart docs: GET /oauth-service/oauth/token?grant_type=client_credentials
+    const response = await fetch(
+      'https://api.flipkart.net/oauth-service/oauth/token?grant_type=client_credentials',
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': 'Basic ' + Buffer.from(consumerId + ':' + consumerSecret).toString('base64'),
+          'User-Agent': 'InventoryApp/1.0'
+        }
+      }
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -57,29 +60,27 @@ async function fetchFlipkartOrders(token) {
   if (!token) return [];
 
   try {
-    // Corrected Flipkart Orders/Shipments URL
     const response = await fetch('https://api.flipkart.net/sellers/v3/shipments/filter/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token
+        'Authorization': 'Bearer ' + token,
+        'User-Agent': 'InventoryApp/1.0'
       },
       body: JSON.stringify({
-        filter: {
-          // Fetching recent shipments
-        }
+        filter: {}
       })
     });
 
     if (!response.ok) {
-      console.error('Flipkart orders failed:', response.status);
+      const errorText = await response.text();
+      console.error('Flipkart orders failed:', response.status, errorText);
       return [];
     }
 
     const data = await response.json();
     const shipments = data.shipments || data.orderItems || [];
 
-    // Flatten the shipments array (one shipment might have multiple items)
     return shipments.flatMap(shipment => {
       const orderItems = shipment.orderItems || [shipment];
       
@@ -109,7 +110,7 @@ async function fetchFlipkartOrders(token) {
 
 async function fetchFlipkartReturns(token) {
   // Flipkart Returns API uses a complex "task" system. 
-  // For now, we skip it to focus on getting Orders working for packing.
+  // Skipping for now to focus on getting Orders working.
   return [];
 }
 
@@ -144,7 +145,7 @@ async function fetchAmazonOrders() {
 
     const tokenData = await tokenResponse.json();
     console.log('Amazon token obtained successfully');
-    return []; // Full order fetching requires AWS Signature V4 signing
+    return [];
   } catch (err) {
     console.error('Amazon error:', err.message);
     return [];
