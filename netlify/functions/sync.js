@@ -23,98 +23,138 @@ function daysAgoISO(days) {
   return d.toISOString();
 }
 
+// Save debug info to Supabase so we can see it without Netlify logs
+async function saveDebug(client, source, requestInfo, responseStatus, responseBody) {
+  try {
+    await client.from('sync_debug').insert({
+      source: source,
+      request_info: typeof requestInfo === 'string' ? requestInfo : JSON.stringify(requestInfo),
+      response_status: responseStatus,
+      response_body: typeof responseBody === 'string'
+        ? responseBody.substring(0, 5000)
+        : JSON.stringify(responseBody).substring(0, 5000)
+    });
+  } catch (e) {
+    console.error('Failed to save debug:', e.message);
+  }
+}
+
 // ============================================================
-// FLIPKART API
+// FLIPKART AUTH
 // ============================================================
-async function getFlipkartToken() {
+async function getFlipkartToken(client) {
   const consumerId = process.env.FLIPKART_CONSUMER_ID;
   const consumerSecret = process.env.FLIPKART_CONSUMER_SECRET;
 
   if (!consumerId || !consumerSecret) {
-    console.log('Flipkart credentials not set');
+    await saveDebug(client, 'flipkart-auth', 'No credentials set', 0, 'FLIPKART_CONSUMER_ID or FLIPKART_CONSUMER_SECRET is missing from environment variables');
     return null;
   }
 
   try {
-    const response = await fetch(
-      'https://api.flipkart.net/oauth-service/oauth/token?grant_type=client_credentials',
-      {
-        method: 'GET',
-        headers: {
-          'Authorization': 'Basic ' + Buffer.from(consumerId + ':' + consumerSecret).toString('base64'),
-          'User-Agent': 'InventoryApp/1.0'
-        }
+    const url = 'https://api.flipkart.net/oauth-service/oauth/token?grant_type=client_credentials';
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': 'Basic ' + Buffer.from(consumerId + ':' + consumerSecret).toString('base64'),
+        'User-Agent': 'InventoryApp/1.0'
       }
-    );
+    });
+
+    const responseText = await response.text();
+
+    await saveDebug(client, 'flipkart-auth', url, response.status, responseText);
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Flipkart auth failed:', response.status, errorText);
       return null;
     }
 
-    const data = await response.json();
-    console.log('Flipkart auth successful, token obtained');
+    const data = JSON.parse(responseText);
     return data.access_token;
   } catch (err) {
-    console.error('Flipkart auth error:', err.message);
+    await saveDebug(client, 'flipkart-auth', 'Exception', 0, err.message);
     return null;
   }
 }
 
-async function fetchFlipkartOrders(token) {
+// ============================================================
+// FLIPKART ORDERS
+// ============================================================
+async function fetchFlipkartOrders(client, token) {
   if (!token) return [];
 
   try {
-    // Fetch orders from the last 7 days
     const fromDate = daysAgoISO(7);
     const toDate = new Date().toISOString();
 
-    console.log('Fetching Flipkart orders from', fromDate, 'to', toDate);
+    const requestBody = {
+      filter: {
+        orderDate: {
+          fromDate: fromDate,
+          toDate: toDate
+        }
+      },
+      sort: {
+        orderDate: 'desc'
+      },
+      paging: {
+        pageSize: 100
+      }
+    };
 
-    const response = await fetch('https://api.flipkart.net/sellers/v3/shipments/filter/', {
+    const url = 'https://api.flipkart.net/sellers/v3/shipments/filter/';
+
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + token,
         'User-Agent': 'InventoryApp/1.0'
       },
-      body: JSON.stringify({
-        filter: {
-          orderDate: {
-            fromDate: fromDate,
-            toDate: toDate
-          }
-        },
-        sort: {
-          orderDate: 'desc'
-        },
-        paging: {
-          pageSize: 100
-        }
-      })
+      body: JSON.stringify(requestBody)
     });
 
+    const responseText = await response.text();
+
+    // Save the raw response so we can see exactly what Flipkart sent
+    await saveDebug(client, 'flipkart-orders', JSON.stringify(requestBody), response.status, responseText);
+
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Flipkart orders failed:', response.status, errorText);
       return [];
     }
 
-    const data = await response.json();
-    console.log('Flipkart raw response keys:', Object.keys(data));
+    const data = JSON.parse(responseText);
 
-    // Try multiple possible response structures
-    const shipments = data.shipments || data.orderItems || data.orders || data.data || [];
-    console.log('Flipkart orders count:', shipments.length);
+    // Try every possible response structure Flipkart might use
+    let shipments = [];
 
+    if (Array.isArray(data)) {
+      shipments = data;
+    } else if (data.shipments && Array.isArray(data.shipments)) {
+      shipments = data.shipments;
+    } else if (data.orderItems && Array.isArray(data.orderItems)) {
+      shipments = data.orderItems;
+    } else if (data.orders && Array.isArray(data.orders)) {
+      shipments = data.orders;
+    } else if (data.data && Array.isArray(data.data)) {
+      shipments = data.data;
+    } else if (data.shipmentItems && Array.isArray(data.shipmentItems)) {
+      shipments = data.shipmentItems;
+    }
+
+    // If still empty, save what keys exist so we can debug
     if (shipments.length === 0) {
-      console.log('Flipkart returned 0 orders. Full response:', JSON.stringify(data).substring(0, 500));
+      await saveDebug(client, 'flipkart-orders-parse',
+        'Could not find orders array. Top-level keys: ' + Object.keys(data).join(', '),
+        200,
+        JSON.stringify(data).substring(0, 3000)
+      );
       return [];
     }
 
     return shipments.flatMap(shipment => {
-      const orderItems = shipment.orderItems || shipment.items || [shipment];
+      const orderItems = shipment.orderItems || shipment.items || shipment.shipmentItems || [shipment];
 
       return orderItems.map(item => ({
         platform: 'Flipkart',
@@ -135,26 +175,21 @@ async function fetchFlipkartOrders(token) {
       }));
     });
   } catch (err) {
-    console.error('Flipkart orders error:', err.message);
+    await saveDebug(client, 'flipkart-orders-error', 'Exception', 0, err.message);
     return [];
   }
 }
 
-async function fetchFlipkartReturns(token) {
-  // Returns API uses a complex task system - skipping for now
-  return [];
-}
-
 // ============================================================
-// AMAZON API
+// AMAZON (placeholder)
 // ============================================================
-async function fetchAmazonOrders() {
+async function fetchAmazonOrders(client) {
   const clientId = process.env.AMAZON_CLIENT_ID;
   const clientSecret = process.env.AMAZON_CLIENT_SECRET;
   const refreshToken = process.env.AMAZON_REFRESH_TOKEN;
 
   if (!clientId || !clientSecret || !refreshToken) {
-    console.log('Amazon credentials not set, skipping');
+    await saveDebug(client, 'amazon-auth', 'Amazon credentials not set', 0, 'Skipping Amazon');
     return [];
   }
 
@@ -170,15 +205,13 @@ async function fetchAmazonOrders() {
       })
     });
 
-    if (!tokenResponse.ok) {
-      console.error('Amazon auth failed:', tokenResponse.status);
-      return [];
-    }
+    const tokenText = await tokenResponse.text();
+    await saveDebug(client, 'amazon-auth', 'Token request', tokenResponse.status, tokenText);
 
-    console.log('Amazon token obtained successfully');
+    if (!tokenResponse.ok) return [];
     return [];
   } catch (err) {
-    console.error('Amazon error:', err.message);
+    await saveDebug(client, 'amazon-auth', 'Exception', 0, err.message);
     return [];
   }
 }
@@ -206,11 +239,10 @@ exports.handler = async (event) => {
 
   try {
     // ---- FLIPKART ----
-    const fkToken = await getFlipkartToken();
+    const fkToken = await getFlipkartToken(client);
 
     if (fkToken) {
-      const fkOrders = await fetchFlipkartOrders(fkToken);
-      console.log('Processing', fkOrders.length, 'Flipkart orders');
+      const fkOrders = await fetchFlipkartOrders(client, fkToken);
 
       for (const order of fkOrders) {
         try {
@@ -231,37 +263,12 @@ exports.handler = async (event) => {
           });
           if (error) {
             errors.push('FK order ' + order.order_id + ': ' + error.message);
-            console.error('FK order error:', order.order_id, error.message);
+            await saveDebug(client, 'flipkart-import-error', order.order_id, 0, error.message);
           } else if (data && data.new) {
             importedOrders++;
-            console.log('New FK order imported:', order.order_id);
           }
         } catch (e) {
           errors.push('FK order insert error: ' + e.message);
-        }
-      }
-
-      const fkReturns = await fetchFlipkartReturns(fkToken);
-      for (const ret of fkReturns) {
-        try {
-          const { data, error } = await client.rpc('import_return', {
-            p_platform: ret.platform,
-            p_return_id: ret.return_id,
-            p_order_id: ret.order_id,
-            p_return_date: ret.return_date,
-            p_order_date: ret.order_date,
-            p_platform_sku_id: ret.platform_sku_id,
-            p_product_name: ret.product_name,
-            p_quantity: ret.quantity,
-            p_region: ret.region,
-            p_major_reason: ret.major_reason,
-            p_minor_reason: ret.minor_reason,
-            p_status: ret.status
-          });
-          if (error) errors.push('FK return ' + ret.return_id + ': ' + error.message);
-          else if (data && data.new) importedReturns++;
-        } catch (e) {
-          errors.push('FK return insert error: ' + e.message);
         }
       }
     } else {
@@ -269,7 +276,7 @@ exports.handler = async (event) => {
     }
 
     // ---- AMAZON ----
-    const amzOrders = await fetchAmazonOrders();
+    const amzOrders = await fetchAmazonOrders(client);
     for (const order of amzOrders) {
       try {
         const { data, error } = await client.rpc('import_order', {
@@ -309,8 +316,6 @@ exports.handler = async (event) => {
       console.error('Failed to write sync log:', logErr.message);
     }
 
-    console.log('Sync complete. Orders:', importedOrders, 'Returns:', importedReturns, 'Errors:', errors.length);
-
     return {
       statusCode: errors.length ? 207 : 200,
       headers: { 'Content-Type': 'application/json' },
@@ -322,7 +327,6 @@ exports.handler = async (event) => {
     };
 
   } catch (err) {
-    console.error('Sync handler error:', err.message);
     try {
       if (client) {
         await client.from('sync_logs').insert({
@@ -334,9 +338,7 @@ exports.handler = async (event) => {
           finished_at: new Date().toISOString()
         });
       }
-    } catch (e) {
-      console.error('Could not write error log:', e.message);
-    }
+    } catch (e) {}
 
     return {
       statusCode: 500,
