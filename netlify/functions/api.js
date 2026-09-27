@@ -45,13 +45,26 @@ exports.handler = async (event, context) => {
 
       if (resource === 'packing-queue') {
         const { data, error } = await client
-          .from('orders')
-          .select('*')
+          .from('orders').select('*')
           .eq('is_cancelled_pre_dispatch', false)
-          .order('order_date', { ascending: false })
-          .limit(200);
+          .order('order_date', { ascending: false }).limit(300);
         if (error) throw new Error('Packing queue: ' + error.message);
-        return resp(200, (data || []).filter(r => (r.dispatch_status || '').toLowerCase() !== 'dispatched'));
+        
+        // Only show orders that actually need packing
+        const packingQueue = (data || []).filter(r => {
+          const dispatch = (r.dispatch_status || '').toLowerCase();
+          const status = (r.status || '').toUpperCase();
+          
+          // Hide if already dispatched
+          if (dispatch === 'dispatched') return false;
+          
+          // Hide if Flipkart says it's shipped/delivered/cancelled
+          if (['SHIPPED', 'DELIVERED', 'PICKUP_COMPLETE', 'CANCELLED', 'CUSTOMER_CANCELLED'].includes(status)) return false;
+          
+          return true;
+        });
+        
+        return resp(200, packingQueue);
       }
 
       if (resource === 'returns-pending') {
