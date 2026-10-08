@@ -67,15 +67,14 @@ async function fetchShipments(client, token, filterType, statesArray, dateDays, 
   const filterBody = {
     filter: {
       type: filterType,
-      states: statesArray,  // ARRAY, not string
+      states: statesArray,
       orderDate: { from: fromDate, to: toDate }
     },
     pagination: {
-      pageSize: 20  // Max is 20 per docs
+      pageSize: 20
     }
   };
 
-  // Add cancellationType for cancelled orders (MANDATORY)
   if (filterType === 'cancelled' && cancellationType) {
     filterBody.filter.cancellationType = cancellationType;
   }
@@ -102,8 +101,6 @@ async function fetchShipments(client, token, filterType, statesArray, dateDays, 
     if (Array.isArray(data)) shipments = data;
     else if (data.shipments && Array.isArray(data.shipments)) shipments = data.shipments;
     else if (data.orderItems && Array.isArray(data.orderItems)) shipments = data.orderItems;
-    else if (data.orders && Array.isArray(data.orders)) shipments = data.orders;
-    else if (data.data && Array.isArray(data.data)) shipments = data.data;
 
     return shipments;
   } catch (err) {
@@ -113,11 +110,21 @@ async function fetchShipments(client, token, filterType, statesArray, dateDays, 
 }
 
 // ============================================================
-// PROCESS SHIPMENTS INTO ORDER FORMAT
+// PROCESS SHIPMENTS - USE SHIPMENT ID FOR DEDUPLICATION
 // ============================================================
-function processShipments(shipments, defaultDispatchStatus) {
-  return shipments.flatMap(shipment => {
-    const orderItems = shipment.orderItems || shipment.items || shipment.shipmentItems || [shipment];
+function processShipments(shipments, defaultDispatchStatus, seenShipmentIds) {
+  const orders = [];
+
+  for (const shipment of shipments) {
+    const shipmentId = String(shipment.shipmentId || shipment.orderId || '');
+    
+    // Skip if we've already processed this shipment in this sync run
+    if (seenShipmentIds.has(shipmentId)) {
+      continue;
+    }
+    seenShipmentIds.add(shipmentId);
+
+    const orderItems = shipment.orderItems || [shipment];
     const shipmentStatus = String(shipment.shipmentStatus || shipment.status || '').toUpperCase();
 
     let dispatchStatus = defaultDispatchStatus;
@@ -126,26 +133,31 @@ function processShipments(shipments, defaultDispatchStatus) {
     }
 
     let isCancelled = false;
-    if (['CANCELLED', 'CUSTOMER_CANCELLED', 'CANCEL', 'FORM_FAILED'].some(s => shipmentStatus.includes(s))) {
+    if (['CANCELLED', 'CUSTOMER_CANCELLED', 'FORM_FAILED'].some(s => shipmentStatus.includes(s))) {
       isCancelled = true;
     }
 
-    return orderItems.map(item => ({
-      platform: 'Flipkart',
-      order_id: String(shipment.shipmentId || shipment.orderId || item.orderId || ''),
-      order_line_id: String(item.orderItemId || item.sku || item.orderId || shipment.orderId || ''),
-      order_date: parseDate(item.orderDate || shipment.dispatchAfterDate || shipment.createdAt),
-      platform_sku_id: String(item.sku || ''),
-      product_name: item.listingId || item.sku || '',
-      quantity: Number(item.quantity || 1),
-      selling_price: item.priceComponents ? item.priceComponents.sellingPrice : null,
-      region: null,
-      status: item.status || shipment.shipmentStatus || 'Pending',
-      dispatch_status: dispatchStatus,
-      is_cancelled_pre_dispatch: isCancelled,
-      cancellation_date: item.cancellationDate || null
-    }));
-  });
+    for (const item of orderItems) {
+      orders.push({
+        platform: 'Flipkart',
+        shipment_id: shipmentId,
+        order_id: String(shipment.orderId || item.orderId || shipmentId),
+        order_line_id: String(item.orderItemId || item.fsn || item.sku || shipmentId),
+        order_date: parseDate(item.orderDate || shipment.dispatchAfterDate || shipment.createdAt),
+        platform_sku_id: String(item.sku || ''),
+        product_name: item.listingId || item.sku || shipment.productName || '',
+        quantity: Number(item.quantity || 1),
+        selling_price: item.priceComponents ? item.priceComponents.sellingPrice : null,
+        region: shipment.locationId || null,
+        status: item.status || shipment.shipmentStatus || 'Pending',
+        dispatch_status: dispatchStatus,
+        is_cancelled_pre_dispatch: isCancelled,
+        cancellation_date: item.cancellationDate || null
+      });
+    }
+  }
+
+  return orders;
 }
 
 // ============================================================
@@ -155,33 +167,33 @@ async function fetchFlipkartOrders(client, token) {
   if (!token) return [];
 
   try {
+    // Track which shipments we've seen to prevent duplicates
+    const seenShipmentIds = new Set();
+
     // 1. Orders ready to pack (preDispatch)
     const preDispatch = await fetchShipments(client, token, 'preDispatch',
       ['APPROVED', 'PACKING_IN_PROGRESS', 'PACKED', 'READY_TO_DISPATCH'], 7);
+    const preDispatchOrders = processShipments(preDispatch, 'Pending', seenShipmentIds);
 
     // 2. Already shipped orders (postDispatch)
     const postDispatch = await fetchShipments(client, token, 'postDispatch',
       ['SHIPPED', 'DELIVERED', 'PICKUP_COMPLETE'], 30);
+    const postDispatchOrders = processShipments(postDispatch, 'Dispatched', seenShipmentIds);
 
-    // 3. Cancelled orders - NOTE: type is 'cancelled' (lowercase), and cancellationType is REQUIRED
+    // 3. Cancelled orders
     const cancelledMarketplace = await fetchShipments(client, token, 'cancelled',
       ['CANCELLED'], 30, 'marketplaceCancellation');
-    
     const cancelledSeller = await fetchShipments(client, token, 'cancelled',
       ['CANCELLED'], 30, 'sellerCancellation');
-    
     const cancelledBuyer = await fetchShipments(client, token, 'cancelled',
       ['CANCELLED'], 30, 'buyerCancellation');
 
     const cancelled = [...cancelledMarketplace, ...cancelledSeller, ...cancelledBuyer];
+    const cancelledOrders = processShipments(cancelled, 'Pending', seenShipmentIds);
 
     await saveDebug(client, 'flipkart-summary',
       'PreDispatch: ' + preDispatch.length + ', PostDispatch: ' + postDispatch.length + ', Cancelled: ' + cancelled.length,
-      200, 'Total: ' + (preDispatch.length + postDispatch.length + cancelled.length));
-
-    const preDispatchOrders = processShipments(preDispatch, 'Pending');
-    const postDispatchOrders = processShipments(postDispatch, 'Dispatched');
-    const cancelledOrders = processShipments(cancelled, 'Pending');
+      200, 'Total unique orders: ' + (preDispatchOrders.length + postDispatchOrders.length + cancelledOrders.length));
 
     return [...preDispatchOrders, ...postDispatchOrders, ...cancelledOrders];
   } catch (err) {
@@ -213,6 +225,7 @@ exports.handler = async (event) => {
         try {
           const { data, error } = await client.rpc('import_order', {
             p_platform: order.platform,
+            p_shipment_id: order.shipment_id,
             p_order_id: order.order_id,
             p_order_line_id: order.order_line_id,
             p_order_date: order.order_date,
@@ -226,7 +239,7 @@ exports.handler = async (event) => {
             p_is_cancelled_pre_dispatch: order.is_cancelled_pre_dispatch,
             p_cancellation_date: order.cancellation_date
           });
-          if (error) errors.push('FK ' + order.order_id + ': ' + error.message);
+          if (error) errors.push('FK ' + order.shipment_id + ': ' + error.message);
           else if (data && data.new) importedOrders++;
         } catch (e) { errors.push('FK: ' + e.message); }
       }
