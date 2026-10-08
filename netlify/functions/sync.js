@@ -27,7 +27,6 @@ exports.handler = async (event) => {
     if (!token) throw new Error('No access token received from Flipkart');
 
     // 2. Fetch Orders
-    // FIX: Removed trailing slash from the URL
     let url = 'https://api.flipkart.net/sellers/v3/shipments/filter';
     let method = 'POST';
     
@@ -81,11 +80,22 @@ exports.handler = async (event) => {
       
       hasMore = data.hasMore === true;
       if (hasMore && data.nextPageUrl) {
-        // Flipkart usually returns a full URL or a relative path
-        if (data.nextPageUrl.startsWith('http')) {
-          url = data.nextPageUrl;
+        let path = data.nextPageUrl;
+        
+        if (path.startsWith('http')) {
+          url = path;
         } else {
-          url = 'https://api.flipkart.net' + data.nextPageUrl;
+          if (!path.startsWith('/')) path = '/' + path;
+          
+          // FIX: Flipkart's pagination link is sometimes missing the "/sellers" prefix.
+          // We detect this and add it back manually so the link works.
+          if (path.startsWith('/v3/')) {
+            url = 'https://api.flipkart.net/sellers' + path;
+          } else if (path.startsWith('/sellers/')) {
+            url = 'https://api.flipkart.net' + path;
+          } else {
+            url = 'https://api.flipkart.net/sellers' + path;
+          }
         }
         method = 'GET'; // Subsequent pages are fetched via GET
         pageNum++;
