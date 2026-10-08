@@ -57,21 +57,28 @@ async function getFlipkartToken(client) {
 }
 
 // ============================================================
-// FETCH SHIPMENTS - TRIES ARRAY FORMAT FIRST, THEN STRING
+// FETCH SHIPMENTS WITH CORRECT FORMAT
 // ============================================================
-async function fetchShipments(client, token, filterType, statesArray, dateDays) {
+async function fetchShipments(client, token, filterType, statesArray, dateDays, cancellationType = null) {
   const url = 'https://api.flipkart.net/sellers/v3/shipments/filter/';
   const fromDate = daysAgoYMD(dateDays);
   const toDate = daysAgoYMD(0);
 
-  // TRY 1: states as ARRAY (this is what worked before)
-  const arrayBody = {
+  const filterBody = {
     filter: {
       type: filterType,
-      states: statesArray,
+      states: statesArray,  // ARRAY, not string
       orderDate: { from: fromDate, to: toDate }
+    },
+    pagination: {
+      pageSize: 20  // Max is 20 per docs
     }
   };
+
+  // Add cancellationType for cancelled orders (MANDATORY)
+  if (filterType === 'cancelled' && cancellationType) {
+    filterBody.filter.cancellationType = cancellationType;
+  }
 
   try {
     const response = await fetch(url, {
@@ -81,64 +88,28 @@ async function fetchShipments(client, token, filterType, statesArray, dateDays) 
         'Authorization': 'Bearer ' + token,
         'User-Agent': 'InventoryApp/1.0'
       },
-      body: JSON.stringify(arrayBody)
+      body: JSON.stringify(filterBody)
     });
 
     const text = await response.text();
-    await saveDebug(client, 'flipkart-' + filterType + '-ARRAY', JSON.stringify(arrayBody), response.status, text);
+    await saveDebug(client, 'flipkart-' + filterType, JSON.stringify(filterBody), response.status, text);
 
-    if (response.ok) {
-      const data = JSON.parse(text);
-      let shipments = [];
-      if (Array.isArray(data)) shipments = data;
-      else if (data.shipments && Array.isArray(data.shipments)) shipments = data.shipments;
-      else if (data.orderItems && Array.isArray(data.orderItems)) shipments = data.orderItems;
-      else if (data.orders && Array.isArray(data.orders)) shipments = data.orders;
-      else if (data.data && Array.isArray(data.data)) shipments = data.data;
-      return shipments;
-    }
+    if (!response.ok) return [];
+
+    const data = JSON.parse(text);
+    let shipments = [];
+
+    if (Array.isArray(data)) shipments = data;
+    else if (data.shipments && Array.isArray(data.shipments)) shipments = data.shipments;
+    else if (data.orderItems && Array.isArray(data.orderItems)) shipments = data.orderItems;
+    else if (data.orders && Array.isArray(data.orders)) shipments = data.orders;
+    else if (data.data && Array.isArray(data.data)) shipments = data.data;
+
+    return shipments;
   } catch (err) {
-    await saveDebug(client, 'flipkart-' + filterType + '-ARRAY-error', 'Exception', 0, err.message);
+    await saveDebug(client, 'flipkart-' + filterType + '-error', 'Exception', 0, err.message);
+    return [];
   }
-
-  // TRY 2: states as comma-separated STRING (fallback)
-  const stringBody = {
-    filter: {
-      type: filterType,
-      states: statesArray.join(','),
-      orderDate: { from: fromDate, to: toDate }
-    }
-  };
-
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + token,
-        'User-Agent': 'InventoryApp/1.0'
-      },
-      body: JSON.stringify(stringBody)
-    });
-
-    const text = await response.text();
-    await saveDebug(client, 'flipkart-' + filterType + '-STRING', JSON.stringify(stringBody), response.status, text);
-
-    if (response.ok) {
-      const data = JSON.parse(text);
-      let shipments = [];
-      if (Array.isArray(data)) shipments = data;
-      else if (data.shipments && Array.isArray(data.shipments)) shipments = data.shipments;
-      else if (data.orderItems && Array.isArray(data.orderItems)) shipments = data.orderItems;
-      else if (data.orders && Array.isArray(data.orders)) shipments = data.orders;
-      else if (data.data && Array.isArray(data.data)) shipments = data.data;
-      return shipments;
-    }
-  } catch (err) {
-    await saveDebug(client, 'flipkart-' + filterType + '-STRING-error', 'Exception', 0, err.message);
-  }
-
-  return [];
 }
 
 // ============================================================
@@ -161,18 +132,18 @@ function processShipments(shipments, defaultDispatchStatus) {
 
     return orderItems.map(item => ({
       platform: 'Flipkart',
-      order_id: String(shipment.orderId || shipment.fsnId || item.orderId || ''),
+      order_id: String(shipment.shipmentId || shipment.orderId || item.orderId || ''),
       order_line_id: String(item.orderItemId || item.sku || item.orderId || shipment.orderId || ''),
-      order_date: parseDate(shipment.orderDate || shipment.createdAt || item.orderDate),
-      platform_sku_id: String(item.sellerSku || item.sku || shipment.sku || ''),
-      product_name: item.productName || item.title || shipment.productName || '',
-      quantity: Number(item.quantity || shipment.quantity || item.qty || 1),
-      selling_price: item.sellingPrice || item.price || shipment.sellingPrice || null,
-      region: shipment.shippingRegion || shipment.region || shipment.customerRegion || null,
-      status: shipment.shipmentStatus || shipment.status || item.status || 'Pending',
+      order_date: parseDate(item.orderDate || shipment.dispatchAfterDate || shipment.createdAt),
+      platform_sku_id: String(item.sku || ''),
+      product_name: item.listingId || item.sku || '',
+      quantity: Number(item.quantity || 1),
+      selling_price: item.priceComponents ? item.priceComponents.sellingPrice : null,
+      region: null,
+      status: item.status || shipment.shipmentStatus || 'Pending',
       dispatch_status: dispatchStatus,
       is_cancelled_pre_dispatch: isCancelled,
-      cancellation_date: shipment.cancellationDate || null
+      cancellation_date: item.cancellationDate || null
     }));
   });
 }
@@ -184,7 +155,7 @@ async function fetchFlipkartOrders(client, token) {
   if (!token) return [];
 
   try {
-    // 1. Orders ready to pack (preDispatch) - states as ARRAY
+    // 1. Orders ready to pack (preDispatch)
     const preDispatch = await fetchShipments(client, token, 'preDispatch',
       ['APPROVED', 'PACKING_IN_PROGRESS', 'PACKED', 'READY_TO_DISPATCH'], 7);
 
@@ -192,9 +163,17 @@ async function fetchFlipkartOrders(client, token) {
     const postDispatch = await fetchShipments(client, token, 'postDispatch',
       ['SHIPPED', 'DELIVERED', 'PICKUP_COMPLETE'], 30);
 
-    // 3. Cancelled orders
-    const cancelled = await fetchShipments(client, token, 'Cancel',
-      ['CANCELLED'], 30);
+    // 3. Cancelled orders - NOTE: type is 'cancelled' (lowercase), and cancellationType is REQUIRED
+    const cancelledMarketplace = await fetchShipments(client, token, 'cancelled',
+      ['CANCELLED'], 30, 'marketplaceCancellation');
+    
+    const cancelledSeller = await fetchShipments(client, token, 'cancelled',
+      ['CANCELLED'], 30, 'sellerCancellation');
+    
+    const cancelledBuyer = await fetchShipments(client, token, 'cancelled',
+      ['CANCELLED'], 30, 'buyerCancellation');
+
+    const cancelled = [...cancelledMarketplace, ...cancelledSeller, ...cancelledBuyer];
 
     await saveDebug(client, 'flipkart-summary',
       'PreDispatch: ' + preDispatch.length + ', PostDispatch: ' + postDispatch.length + ', Cancelled: ' + cancelled.length,
