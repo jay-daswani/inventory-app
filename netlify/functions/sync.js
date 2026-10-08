@@ -3,7 +3,6 @@ const { createClient } = require('@supabase/supabase-js');
 exports.handler = async (event) => {
   const client = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
   
-  // 1. Log the start of the sync
   const { data: logData } = await client.from('sync_logs').insert({
     platform: 'Flipkart',
     status: 'Started',
@@ -13,7 +12,7 @@ exports.handler = async (event) => {
   const logId = logData ? logData.id : null;
 
   try {
-    // 2. Get Flipkart Token (Fixed: Added required scope=Seller_Api)
+    // 1. Get Token
     const authRes = await fetch('https://api.flipkart.net/oauth-service/oauth/token?grant_type=client_credentials&scope=Seller_Api', {
       method: 'GET',
       headers: { 
@@ -21,34 +20,36 @@ exports.handler = async (event) => {
       }
     });
     
-    if (!authRes.ok) throw new Error('Failed to get Flipkart token: ' + authRes.statusText);
+    if (!authRes.ok) throw new Error('Failed to get Flipkart token: ' + await authRes.text());
     
     const authData = await authRes.json();
     const token = authData.access_token;
     if (!token) throw new Error('No access token received from Flipkart');
 
-    // 3. Fetch ALL active preDispatch orders (Fixed: Removed date filter, Added Pagination)
-    let url = 'https://api.flipkart.net/sellers/v3/shipments/filter/';
+    // 2. Fetch Orders
+    // FIX: Removed trailing slash from the URL
+    let url = 'https://api.flipkart.net/sellers/v3/shipments/filter';
     let method = 'POST';
+    
     const body = JSON.stringify({
       filter: {
         type: "preDispatch",
         states: ["APPROVED", "PACKING_IN_PROGRESS", "PACKED", "READY_TO_DISPATCH"]
-        // We intentionally DO NOT filter by orderDate here. 
-        // We want ALL orders that Flipkart says are waiting to be dispatched.
       },
       pagination: { pageSize: 20 }
     });
 
     let allShipments = [];
     let hasMore = true;
+    let pageNum = 1;
 
     while (hasMore) {
       const options = {
         method: method,
         headers: {
           'Authorization': 'Bearer ' + token,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
         }
       };
       
@@ -56,18 +57,21 @@ exports.handler = async (event) => {
         options.body = body;
       }
 
-      const res = await fetch(url, options);
+      console.log(`Fetching page ${pageNum} using ${method} ${url}`);
       
-      // Save raw response to debug table just in case we need to troubleshoot later
+      const res = await fetch(url, options);
       const text = await res.text();
+      
       await client.from('sync_debug').insert({
-        source: 'Flipkart-Sync-Page',
-        request_info: url,
+        source: `Flipkart-Sync-Page-${pageNum}`,
+        request_info: `${method} ${url}`,
         response_status: res.status,
         response_body: text.substring(0, 4000)
       });
 
-      if (!res.ok) throw new Error('Flipkart API error: ' + res.statusText + ' | ' + text);
+      if (!res.ok) {
+        throw new Error(`Flipkart API error on page ${pageNum} (${method} ${url}): ${res.status} ${res.statusText} | ${text}`);
+      }
 
       const data = JSON.parse(text);
       
@@ -77,17 +81,20 @@ exports.handler = async (event) => {
       
       hasMore = data.hasMore === true;
       if (hasMore && data.nextPageUrl) {
-        // Flipkart returns a relative URL for the next page (e.g., /sellers/v3/shipments/...)
+        // Flipkart usually returns a full URL or a relative path
         if (data.nextPageUrl.startsWith('http')) {
           url = data.nextPageUrl;
         } else {
           url = 'https://api.flipkart.net' + data.nextPageUrl;
         }
         method = 'GET'; // Subsequent pages are fetched via GET
+        pageNum++;
+      } else {
+        hasMore = false; // Stop if no nextPageUrl
       }
     }
 
-    // 4. Process and Upsert to Supabase
+    // 3. Process and Upsert to Supabase
     let recordsImported = 0;
     const ordersToUpsert = [];
 
@@ -112,7 +119,6 @@ exports.handler = async (event) => {
     }
 
     if (ordersToUpsert.length > 0) {
-      // SMART LOCK: Check which orders are already manually marked as Dispatched/Cancelled by you
       const orderIds = ordersToUpsert.map(o => o.order_id);
       const { data: existingOrders } = await client
         .from('orders')
@@ -125,7 +131,6 @@ exports.handler = async (event) => {
           .map(o => `${o.order_id}-${o.order_line_id}`)
       );
 
-      // Filter out orders you have already finished processing so they don't reappear as "Pending"
       const ordersToActuallyUpsert = ordersToUpsert.filter(o => !finalizedOrders.has(`${o.order_id}-${o.order_line_id}`));
 
       if (ordersToActuallyUpsert.length > 0) {
@@ -140,7 +145,6 @@ exports.handler = async (event) => {
       }
     }
 
-    // 5. Update Sync Log with Success
     if (logId) {
       await client.from('sync_logs').update({
         status: 'Completed',
@@ -155,7 +159,6 @@ exports.handler = async (event) => {
     };
 
   } catch (err) {
-    // Log any errors that occurred
     if (logId) {
       await client.from('sync_logs').update({
         status: 'Failed',
