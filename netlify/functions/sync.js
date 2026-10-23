@@ -28,9 +28,11 @@ exports.handler = async (event) => {
 
     // 2. Fetch Orders
     let url = 'https://api.flipkart.net/sellers/v3/shipments/filter';
-    let method = 'POST';
-    
-    const body = JSON.stringify({
+    let hasMore = true;
+    let pageNum = 1;
+
+    // This is the body we ONLY send on the very first request
+    const firstPageBody = JSON.stringify({
       filter: {
         type: "preDispatch",
         states: ["APPROVED", "PACKING_IN_PROGRESS", "PACKED", "READY_TO_DISPATCH"]
@@ -39,12 +41,13 @@ exports.handler = async (event) => {
     });
 
     let allShipments = [];
-    let hasMore = true;
-    let pageNum = 1;
 
     while (hasMore) {
+      // Check if we are on page 2 or higher by looking for the next_token in the URL
+      const isNextPage = url.includes('next_token');
+      
       const options = {
-        method: method,
+        method: 'POST', // Flipkart's filter endpoint STRICTLY requires POST, not GET
         headers: {
           'Authorization': 'Bearer ' + token,
           'Content-Type': 'application/json',
@@ -52,24 +55,29 @@ exports.handler = async (event) => {
         }
       };
       
-      if (method === 'POST') {
-        options.body = body;
+      // THE FIX: If it's the first page, send the filter body.
+      // If it's a subsequent page, send an EMPTY body {} so Flipkart uses the next_token!
+      if (!isNextPage) {
+        options.body = firstPageBody;
+      } else {
+        options.body = '{}'; 
       }
 
-      console.log(`Fetching page ${pageNum} using ${method} ${url}`);
+      console.log(`Fetching page ${pageNum} using POST ${url}`);
       
       const res = await fetch(url, options);
       const text = await res.text();
       
+      // Save to debug table
       await client.from('sync_debug').insert({
         source: `Flipkart-Sync-Page-${pageNum}`,
-        request_info: `${method} ${url}`,
+        request_info: `POST ${url}`,
         response_status: res.status,
         response_body: text.substring(0, 4000)
       });
 
       if (!res.ok) {
-        throw new Error(`Flipkart API error on page ${pageNum} (${method} ${url}): ${res.status} ${res.statusText} | ${text}`);
+        throw new Error(`Flipkart API error on page ${pageNum} (POST ${url}): ${res.status} ${res.statusText} | ${text}`);
       }
 
       const data = JSON.parse(text);
@@ -87,8 +95,7 @@ exports.handler = async (event) => {
         } else {
           if (!path.startsWith('/')) path = '/' + path;
           
-          // FIX: Flipkart's pagination link is sometimes missing the "/sellers" prefix.
-          // We detect this and add it back manually so the link works.
+          // FIX: Flipkart's pagination link is known to omit the "/sellers" prefix.
           if (path.startsWith('/v3/')) {
             url = 'https://api.flipkart.net/sellers' + path;
           } else if (path.startsWith('/sellers/')) {
@@ -97,7 +104,6 @@ exports.handler = async (event) => {
             url = 'https://api.flipkart.net/sellers' + path;
           }
         }
-        method = 'GET'; // Subsequent pages are fetched via GET
         pageNum++;
       } else {
         hasMore = false; // Stop if no nextPageUrl
