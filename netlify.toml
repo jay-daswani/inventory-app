@@ -1,11 +1,15 @@
+# Inventory app: settings Netlify reads when it builds the site.
+
 [build]
   command = "npm install"
-  publish = "."
+  publish = "public"
+
+[build.environment]
+  NODE_VERSION = "20"
 
 [functions]
   node_bundler = "esbuild"
 
-[[redirects]]
-  from = "/api/*"
-  to = "/.netlify/functions/api/:splat"
-  status = 200
+# Wakes up every 30 minutes, checks for new and changed orders, and hands the work to sync-background.
+[functions."sync-scheduled"]
+  schedule = "*/30 * * * *"

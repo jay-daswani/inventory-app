@@ -1,7 +1,8 @@
 {
-  "name": "inventory-manufacturing-app",
-  "version": "1.0.0",
+  "name": "inventory-app",
+  "version": "2.0.0",
   "private": true,
+  "description": "Inventory and analytics app for Flipkart (Amazon later) seller orders and returns",
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4"
   }
