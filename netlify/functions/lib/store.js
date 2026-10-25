@@ -12,7 +12,10 @@ function fail(what, error) {
 }
 
 function createSupabaseStore(env, injectedClient) {
-  const client = injectedClient || createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  // This app never uses Supabase's live-update feature. The library still wants a "WebSocket" to exist on
+  // older Node versions, so hand it an empty stand-in there instead of letting the function crash at start-up.
+  const noLive = typeof WebSocket === 'undefined' ? { transport: class NoLiveUpdates {} } : {};
+  const client = injectedClient || createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false }, realtime: noLive });
 
   async function rpc(name, args) {
     const { data, error } = await client.rpc(name, args || {});
