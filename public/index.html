@@ -197,6 +197,12 @@
   td input.cell:focus { border-color: var(--accent); background: var(--panel); outline: none; }
   td input.cell.missing { border-color: var(--transit); background: var(--transit-bg); color: var(--transit-fg); }
   td input.cell.w-s { width: 70px; } td input.cell.w-m { width: 110px; }
+  .savebar { position: sticky; bottom: 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 10px 0; margin-top: 10px; background: var(--paper); border-top: 1px solid var(--line); }
+  .neg { color: var(--danger); font-weight: 600; }
+  td input.count { width: 84px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+  td input.count:focus { border-color: var(--accent); outline: none; }
+  form.move { display: flex; gap: 10px 12px; flex-wrap: wrap; align-items: flex-end; }
+  form.move .field select, form.move .field input { min-width: 0; }
   .saved { color: var(--delivered-fg); font-size: 12.5px; opacity: 0; transition: opacity .2s; }
   .saved.on { opacity: 1; }
 
@@ -275,6 +281,17 @@ function fmtDate(iso, withTime) {
   if (withTime) { opts.hour = 'numeric'; opts.minute = '2-digit'; }
   return d.toLocaleString('en-IN', opts);
 }
+const nowIstLocal = () => new Date(Date.now() + 330 * 60000).toISOString().slice(0, 16);   // for a date-and-time box
+const SIZE_ORDER = ['XXS', 'XS', 'S', 'M', 'L', 'XL', '2XL', 'XXL', '3XL', 'XXXL', '4XL', '5XL', 'FREE', 'FREE SIZE'];
+function sizeRank(size) {
+  const v = String(size == null ? '' : size).trim().toUpperCase();
+  const i = SIZE_ORDER.indexOf(v);
+  if (i >= 0) return i;
+  const n = Number(v);
+  if (v !== '' && Number.isFinite(n)) return 100 + n;
+  return 1000;
+}
+const byColourSize = (a, b) => String(a.colour || '').localeCompare(String(b.colour || '')) || sizeRank(a.size) - sizeRank(b.size) || String(a.size || '').localeCompare(String(b.size || ''));
 const todayIST = () => new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
 const addDays = (day, n) => new Date(Date.parse(day + 'T00:00:00Z') + n * 86400000).toISOString().slice(0, 10);
 const istDay = (iso) => new Date(new Date(iso).getTime() + 330 * 60000).toISOString().slice(0, 10);
@@ -339,7 +356,7 @@ const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = se
 
 /* ================= shell ================= */
 const root = document.getElementById('app');
-const VIEWS = [['overview', 'Overview'], ['orders', 'Orders'], ['returns', 'Returns'], ['catalogue', 'Catalogue'], ['sync', 'Sync']];
+const VIEWS = [['overview', 'Overview'], ['orders', 'Orders'], ['returns', 'Returns'], ['stock', 'Stock'], ['catalogue', 'Catalogue'], ['sync', 'Sync']];
 let freshBox = null;
 let pollTimer = null;
 let navToken = 0;
@@ -409,7 +426,7 @@ function route() {
   const token = ++navToken;
   fill(main, h('p', { class: 'loading' }, 'Loading…'));
   document.title = (VIEWS.find((v) => v[0] === view) || [])[1] + ' · Daswani Exports';
-  const fn = { overview: viewOverview, orders: viewOrders, returns: viewReturns, catalogue: viewCatalogue, sync: viewSync }[view];
+  const fn = { overview: viewOverview, orders: viewOrders, returns: viewReturns, stock: viewStock, catalogue: viewCatalogue, sync: viewSync }[view];
   fn(main, () => token === navToken).catch((e) => {
     if (token !== navToken || e.message === 'Signed out') return;
     fill(main, h('div', { class: 'notice error', role: 'alert' }, 'Could not load this screen. ' + e.message + ' '),
@@ -728,7 +745,7 @@ async function viewCatalogue(main, alive) {
       h('div', { class: 'inner' }, h('table', { class: 'stack' },
         h('thead', null, h('tr', null, h('th', null, 'Colour'), h('th', null, 'Size'), h('th', null, 'Flipkart SKU'), h('th', { class: 'num' }, 'Cost ₹'), h('th', { class: 'num' }, 'Lead time (days)'),
           h('th', { class: 'num' }, 'Sold 30 days'), h('th', { class: 'num' }, 'Sold 90 days'), h('th', { class: 'num' }, 'Returned 90 days'), h('th', null, 'Details checked'), h('th', null, ''))),
-        h('tbody', null, list.map(itemRow)))));
+        h('tbody', null, [...list].sort(byColourSize).map(itemRow)))));
     return det;
   }
 
@@ -776,6 +793,132 @@ async function viewCatalogue(main, alive) {
       h('label', { class: 'field' }, ' ', h('span', null, c2, ` items not checked yet (${toReview})`))),
     body);
   draw();
+}
+
+/* ================= Stock ================= */
+const stockState = { q: '', onlyUncounted: false, typed: new Map() };
+const MOVE_LABEL = { received: 'Stock received', adjust: 'Adjustment' };
+
+async function viewStock(main, alive) {
+  const data = await api('stock');
+  if (!alive()) return;
+  const items = data.items;
+  const label = (i) => (i.colour || i.size ? [i.colour, i.size].filter(Boolean).join(' · ') : i.name);
+  const counted = items.filter((i) => i.on_hand != null);
+  const totalUnits = counted.reduce((a, i) => a + Number(i.on_hand), 0);
+  const waiting = items.reduce((a, i) => a + Number(i.waiting_to_ship), 0);
+  const fixing = items.reduce((a, i) => a + Number(i.being_fixed), 0);
+  const body = h('div');
+  const saveBar = h('div', { class: 'savebar' });
+  const whenBox = h('input', { type: 'datetime-local', value: nowIstLocal(), max: nowIstLocal(), 'aria-label': 'When you counted' });
+
+  function updateSaveBar() {
+    const n = [...stockState.typed.values()].filter((v) => v !== '').length;
+    const btn = h('button', { class: 'btn', disabled: n === 0, onclick: save }, n ? `Save ${n} ${n === 1 ? 'count' : 'counts'}` : 'Save counts');
+    fill(saveBar, btn, h('span', { class: 'muted' }, n ? 'Counted at the time above (Indian time). Items you leave empty are not changed.' : 'Type a count next to an item. Items you leave empty are not changed.'));
+  }
+
+  async function save() {
+    const rows = [...stockState.typed.entries()].filter(([, v]) => v !== '').map(([id, v]) => ({ stock_item_id: Number(id), qty: Number(v) }));
+    if (!whenBox.value) { alert('Please pick the date and time of the count.'); return; }
+    if (rows.some((r) => !Number.isInteger(r.qty) || r.qty < 0)) { alert('Counts must be whole numbers, zero or more.'); return; }
+    try {
+      await api('save_counts', { counted_at: whenBox.value, rows });
+      stockState.typed.clear();
+      await viewStock(main, alive);
+    } catch (e) { alert(e.message); }
+  }
+
+  function draw() {
+    const q = stockState.q.toLowerCase();
+    const shown = items.filter((i) => (!stockState.onlyUncounted || i.on_hand == null) && (!q || `${i.name} ${i.design || ''}`.toLowerCase().includes(q)));
+    const groups = new Map();
+    shown.forEach((i) => { const k = i.design || 'No design set'; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(i); });
+    if (!shown.length) { fill(body, h('div', { class: 'empty' }, h('h3', null, 'No items match'), h('p', null, 'Clear the filters to see everything.'))); return; }
+    fill(body, [...groups.entries()].map(([design, list]) => {
+      const sorted = [...list].sort(byColourSize);
+      const units = sorted.reduce((a, i) => a + (i.on_hand == null ? 0 : Number(i.on_hand)), 0);
+      const uncounted = sorted.filter((i) => i.on_hand == null).length;
+      return h('details', { class: 'design', open: Boolean(stockState.q || stockState.onlyUncounted || sorted.some((i) => stockState.typed.get(String(i.stock_item_id)))) },
+        h('summary', null, h('span', { class: 'design-name' }, design),
+          h('span', { class: 'design-facts' }, uncounted === sorted.length ? `${sorted.length} sizes and colours, none counted yet` : `${sorted.length} sizes and colours, ${fmtInt(units)} in stock${uncounted ? `, ${uncounted} not counted yet` : ''}`)),
+        h('div', { class: 'inner' }, h('table', { class: 'stack' },
+          h('thead', null, h('tr', null, h('th', null, 'Item'), h('th', null, 'Last count'), h('th', { class: 'num' }, 'Stock now'), h('th', { class: 'num' }, 'Waiting to ship'), h('th', { class: 'num' }, 'Being fixed'), h('th', null, 'New count'))),
+          h('tbody', null, sorted.map((i) => {
+            const id = String(i.stock_item_id);
+            const inp = h('input', { class: 'count', type: 'number', min: '0', step: '1', inputmode: 'numeric', value: stockState.typed.get(id) || '', 'aria-label': `New count for ${i.name}`,
+              oninput: () => { stockState.typed.set(id, inp.value.trim()); updateSaveBar(); } });
+            const on = i.on_hand;
+            return h('tr', null,
+              h('td', null, label(i)),
+              h('td', { 'data-l': 'Last count' }, i.counted_at ? `${fmtInt(i.counted_qty)} on ${fmtDate(i.counted_at, true)}` : h('span', { class: 'muted' }, 'Not counted')),
+              h('td', { class: 'num', 'data-l': 'Stock now' }, on == null ? '' : h('span', { class: Number(on) < 0 ? 'neg' : null, title: Number(on) < 0 ? 'Below zero: recount, or record stock you received' : null }, fmtInt(on))),
+              h('td', { class: 'num', 'data-l': 'Waiting to ship' }, Number(i.waiting_to_ship) ? fmtInt(i.waiting_to_ship) : ''),
+              h('td', { class: 'num', 'data-l': 'Being fixed' }, Number(i.being_fixed) ? fmtInt(i.being_fixed) : ''),
+              h('td', { 'data-l': 'New count' }, inp));
+          })))));
+    }));
+  }
+
+  // ----- record stock received / adjustments -----
+  const designs = new Map();
+  [...items].sort((a, b) => String(a.design || '~').localeCompare(String(b.design || '~')) || byColourSize(a, b))
+    .forEach((i) => { const k = i.design || 'No design set'; if (!designs.has(k)) designs.set(k, []); designs.get(k).push(i); });
+  const itemSel = h('select', { required: true, 'aria-label': 'Item' }, h('option', { value: '' }, 'Choose an item…'),
+    [...designs.entries()].map(([d, list]) => h('optgroup', { label: d }, list.map((i) => h('option', { value: i.stock_item_id }, label(i))))));
+  const kindSel = h('select', { 'aria-label': 'Type' }, h('option', { value: 'received' }, 'Stock received'), h('option', { value: 'adjust' }, 'Adjustment (use − to remove)'));
+  const qty = h('input', { type: 'number', step: '1', required: true, style: 'width:90px', 'aria-label': 'Quantity' });
+  const when2 = h('input', { type: 'datetime-local', value: nowIstLocal(), max: nowIstLocal(), required: true, 'aria-label': 'Date and time' });
+  const note = h('input', { type: 'text', maxlength: '200', placeholder: 'Optional, e.g. supplier name', style: 'min-width:200px', 'aria-label': 'Note' });
+  const addForm = h('form', { class: 'move', onsubmit: async (e) => {
+    e.preventDefault();
+    try {
+      await api('add_move', { stock_item_id: Number(itemSel.value), kind: kindSel.value, qty: Number(qty.value), moved_at: when2.value, note: note.value });
+      await viewStock(main, alive);
+    } catch (err) { alert(err.message); }
+  } },
+    h('label', { class: 'field' }, 'Item', itemSel), h('label', { class: 'field' }, 'Type', kindSel), h('label', { class: 'field' }, 'Quantity', qty),
+    h('label', { class: 'field' }, 'When', when2), h('label', { class: 'field' }, 'Note', note),
+    h('button', { class: 'btn', type: 'submit' }, 'Add'));
+
+  const moves = data.moves.length
+    ? h('div', { class: 'tablewrap', style: 'margin-top:14px' }, h('table', { class: 'stack' },
+        h('thead', null, h('tr', null, h('th', null, 'When'), h('th', null, 'Item'), h('th', null, 'Type'), h('th', { class: 'num' }, 'Quantity'), h('th', null, 'Note'), h('th', null, ''))),
+        h('tbody', null, data.moves.map((m) => h('tr', null,
+          h('td', { 'data-l': 'When' }, fmtDate(m.moved_at, true)), h('td', { 'data-l': 'Item' }, m.name), h('td', { 'data-l': 'Type' }, MOVE_LABEL[m.kind] || m.kind),
+          h('td', { class: 'num', 'data-l': 'Quantity' }, (Number(m.qty) > 0 ? '+' : '') + fmtInt(m.qty)), h('td', { 'data-l': 'Note' }, m.note || ''),
+          h('td', { 'data-l': '' }, h('button', { class: 'btn small quiet', onclick: async () => {
+            if (!confirm('Remove this entry? The stock number will change back.')) return;
+            try { await api('delete_move', { id: m.id }); await viewStock(main, alive); } catch (err) { alert(err.message); }
+          } }, 'Remove')))))))
+    : null;
+
+  const search = h('input', { type: 'search', value: stockState.q, placeholder: 'Item or design', 'aria-label': 'Search stock', oninput: debounce(() => { stockState.q = search.value.trim(); draw(); }, 250) });
+  const only = h('input', { type: 'checkbox', checked: stockState.onlyUncounted, onchange: () => { stockState.onlyUncounted = only.checked; draw(); } });
+  const uncountedAll = items.length - counted.length;
+
+  fill(main,
+    h('div', { class: 'page-head' }, h('div', null, h('h1', null, 'Stock'),
+      h('p', null, 'Count what you hold, and the app keeps the number up to date: orders that ship take stock off, and returns you mark sellable put it back. Count every unit you physically hold, including parcels that are packed but not yet picked up by the courier.'))),
+    uncountedAll ? h('div', { class: 'notice' }, `${uncountedAll} of ${items.length} items have not been counted yet. An item shows a stock number only after its first count.`) : null,
+    counted.length ? h('p', { class: 'lede', style: 'margin-bottom:18px' }, h('strong', null, fmtInt(totalUnits)), ' units in stock across ', h('strong', null, fmtInt(counted.length)), ' counted items',
+      waiting ? [', with ', h('strong', null, fmtInt(waiting)), waiting === 1 ? ' unit' : ' units', ' already promised to orders waiting to ship'] : null,
+      fixing ? [', and ', h('strong', null, fmtInt(fixing)), ' more being dry-cleaned or pressed'] : null, '.') : null,
+    h('section', { class: 'block', style: 'margin-top:8px' }, h('h2', null, 'Count sheet'),
+      h('p', { class: 'sub' }, 'Counting again later replaces the earlier count for that item. Orders shipped and returns marked after the count time are applied on top of it.'),
+      h('div', { class: 'controls' },
+        h('label', { class: 'field' }, 'Counted on (Indian time)', whenBox),
+        h('label', { class: 'field' }, 'Search', search),
+        h('label', { class: 'field' }, 'Only show', h('span', null, only, ` items not counted yet (${uncountedAll})`)),
+        h('button', { class: 'btn quiet', type: 'button', onclick: () => downloadCsv('stock-count-sheet.csv',
+          [...items].sort((a, b) => String(a.design || '~').localeCompare(String(b.design || '~')) || byColourSize(a, b))
+            .map((i) => ({ Design: i.design || '', Colour: i.colour || '', Size: i.size || '', Item: i.name, 'Last count': i.counted_qty == null ? '' : i.counted_qty, 'Counted today': '' }))) }, 'Download count sheet')),
+      body, saveBar),
+    h('section', { class: 'block' }, h('h2', null, 'Stock received or adjusted'),
+      h('p', { class: 'sub' }, 'Add what arrives from suppliers or your own making, and any one-off changes such as samples, gifts, losses or items found. Entries dated before an item’s latest count are already inside that count and are ignored.'),
+      addForm, moves));
+  draw();
+  updateSaveBar();
 }
 
 /* ================= Sync ================= */

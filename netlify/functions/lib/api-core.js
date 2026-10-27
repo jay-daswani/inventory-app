@@ -30,6 +30,21 @@ const oneOf = (value, list, label) => {
   if (!list.includes(value)) throw new InputError(`Unknown ${label}: ${value}`);
   return value;
 };
+// A date and time typed on the screen ("2026-10-27T19:30") is Indian time.
+const LOCAL_TIME_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+function indianTime(value, nowMs) {
+  const v = String(value || '');
+  if (!LOCAL_TIME_RE.test(v) || Number.isNaN(Date.parse(`${v}:00Z`))) throw new InputError('Please give a date and time');
+  const at = `${v}:00+05:30`;
+  if (Date.parse(at) > nowMs + 10 * 60000) throw new InputError('That time is in the future');
+  return at;
+}
+const wholeNumber = (value, min, max, label) => {
+  const n = Number(value);
+  if (value === '' || value == null || !Number.isInteger(n) || n < min || n > max) throw new InputError(`${label} must be a whole number`);
+  return n;
+};
+
 const text = (v, max = 80) => (v == null ? null : String(v).slice(0, max));
 const page = (body) => ({
   limit: Math.min(200, Math.max(1, Number(body.pageSize) || 50)),
@@ -120,6 +135,37 @@ async function handleAction(body, deps) {
       const condition = body.condition == null || body.condition === '' ? '' : oneOf(body.condition, CONDITIONS, 'condition');
       return store.rpc('api_set_condition', { p_id: id, p_condition: condition });
     }
+
+    case 'stock':
+      return store.rpc('api_stock');
+
+    case 'save_counts': {
+      const at = indianTime(body.counted_at, now());
+      const rows = Array.isArray(body.rows) ? body.rows : [];
+      if (!rows.length) throw new InputError('Type at least one count first');
+      if (rows.length > 500) throw new InputError('Too many items at once');
+      const clean = rows.map((r) => ({
+        stock_item_id: wholeNumber(r.stock_item_id, 1, 1e12, 'Item'),
+        qty: wholeNumber(r.qty, 0, 1000000, 'A count')
+      }));
+      return { saved: await store.rpc('api_save_counts', { p_counted_at: at, p_rows: clean }) };
+    }
+
+    case 'add_move': {
+      const kind = oneOf(body.kind, ['received', 'adjust'], 'kind');
+      if (!kind) throw new InputError('Choose received or adjustment');
+      const qty = wholeNumber(body.qty, -1000000, 1000000, 'Quantity');
+      if (qty === 0) throw new InputError('Quantity cannot be zero');
+      if (kind === 'received' && qty < 0) throw new InputError('Stock received must be more than zero. Use an adjustment to take stock off.');
+      const id = await store.rpc('api_add_move', {
+        p_item: wholeNumber(body.stock_item_id, 1, 1e12, 'Item'), p_kind: kind, p_qty: qty,
+        p_at: indianTime(body.moved_at, now()), p_note: text(body.note, 200)
+      });
+      return { id };
+    }
+
+    case 'delete_move':
+      return { deleted: await store.rpc('api_delete_move', { p_id: wholeNumber(body.id, 1, 1e12, 'Entry') }) };
 
     case 'export': {
       const what = body.what === 'returns' ? 'returns' : 'orders';
